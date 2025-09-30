@@ -1,5 +1,5 @@
 from neomodel import (
-    StructuredNode, StringProperty, DateTimeProperty,
+    StructuredNode, StringProperty, DateTimeProperty, Relationship,
     RelationshipTo, RelationshipFrom
 )
 from datetime import datetime
@@ -24,6 +24,10 @@ class User(StructuredNode):
     email = StringProperty(unique_index=True)
     password_hash = StringProperty()
     servers = RelationshipTo('Server', 'MEMBER_OF')
+    friends = Relationship('User', 'FRIEND_WITH')
+    #Friend requests
+    sent_requests = RelationshipTo('User', 'SENT_REQUEST')
+    received_requests = RelationshipFrom('User', 'SENT_REQUEST')
 
 
 class Channel(StructuredNode):
