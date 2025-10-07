@@ -13,7 +13,9 @@ def game_to_dict(g: Game):
         "cover_url": g.cover_url,
         "play_url": g.play_url,
         "source": g.source,
+        "playable": bool(g.play_url),  # <-- this will be True if play_url exists
     }
+
 
 @router.post("/seed_gamepix")
 async def seed_gamepix(limit: int = 1000, offset: int = 0):
@@ -49,8 +51,11 @@ def get_game(external_id: str):
     try:
         g = Game.nodes.get_or_none(external_id=external_id)
         if not g:
+            print(f"[INFO] Game click attempted but not found: {external_id}")
             raise HTTPException(status_code=404, detail="Game not found")
+        
+        print(f"[INFO] Game clicked: {g.title} ({external_id}) → Play URL: {g.play_url}")
         return game_to_dict(g)
     except Exception as e:
-        print(f"[ERROR] get_game crashed for {external_id}:", e)
+        print(f"[ERROR] get_game crashed for {external_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Could not fetch game: {e}")

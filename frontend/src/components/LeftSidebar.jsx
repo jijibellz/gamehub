@@ -1,0 +1,113 @@
+import { Box, IconButton, Tooltip, Avatar } from "@mui/material";
+import { Chat, Groups, SportsEsports, Pets } from "@mui/icons-material";
+import { useNavigate } from "react-router-dom";
+
+export default function LeftSidebar() {
+  const navigate = useNavigate();
+
+  return (
+    <Box
+  display="flex"
+  flexDirection="column"
+  alignItems="center"
+  width="80px"
+  bgcolor="#0f1113"
+  height="100vh"
+  sx={{
+    borderRight: "1px solid #202225",
+    p: 2,
+    boxSizing: "border-box",
+  }}
+>
+
+      {/* top profile/avatar icon - Gaming Kitty */}
+      <Box mb={1}>
+        <Box
+          sx={{
+            width: 48,
+            height: 48,
+            borderRadius: 2,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            overflow: "hidden",
+          }}
+        >
+          <img 
+            src="/gaming-cat-icon.png" 
+            alt="Gaming Cat" 
+            style={{ 
+              width: "100%", 
+              height: "100%", 
+              objectFit: "contain" 
+            }} 
+          />
+        </Box>
+      </Box>
+
+      {/* nav icons */}
+      <Box display="flex" flexDirection="column" gap={1} mt={1}>
+        <Tooltip title="Games" placement="right">
+          <IconButton
+            sx={{
+              bgcolor: "#111214",
+              width: 48,
+              height: 48,
+              borderRadius: 2,
+            }}
+            onClick={() => navigate("/feed")}
+          >
+            <SportsEsports sx={{ color: "#dcdde1" }} />
+          </IconButton>
+        </Tooltip>
+
+        <Tooltip title="Direct Messages" placement="right">
+          <IconButton
+            sx={{
+              bgcolor: "#111214",
+              width: 48,
+              height: 48,
+              borderRadius: 2,
+            }}
+            onClick={() => navigate("/chat")}
+          >
+            <Chat sx={{ color: "#dcdde1" }} />
+          </IconButton>
+        </Tooltip>
+
+        <Tooltip title="Servers" placement="right">
+          <IconButton
+            sx={{
+              bgcolor: "#111214",
+              width: 48,
+              height: 48,
+              borderRadius: 2,
+            }}
+            onClick={() => navigate("/server")}
+          >
+            <Groups sx={{ color: "#dcdde1" }} />
+          </IconButton>
+        </Tooltip>
+      </Box>
+
+      {/* spacer */}
+      <Box flexGrow={1} />
+
+      {/* bottom icon (placeholder for settings or status) */}
+      <Box mb={1}>
+        <IconButton
+          sx={{
+            bgcolor: "#111214",
+            width: 40,
+            height: 40,
+            borderRadius: 2,
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="2" fill="#dcdde1" />
+          </svg>
+        </IconButton>
+      </Box>
+    </Box>
+  );
+}

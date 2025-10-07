@@ -4,32 +4,52 @@ from controllers.friendrequest import (
     accept_friend_request_logic,
     reject_friend_request_logic,
     get_pending_requests_logic,
-    get_friends_logic
+    get_friends_logic,
+    get_all_users_logic
 )
 
 router = APIRouter(prefix="/friends", tags=["Friends"])
 
 # ✅ Send Request
-@router.post("/request/{receiver_id}")
-async def send_friend_request(sender_id: str = Query(...), receiver_id: str = None):
-    return await send_friend_request_logic(sender_id, receiver_id)
+@router.post("/request/{receiver_username}")
+def send_friend_request(receiver_username: str, sender_username: str = Query(...)):
+    return send_friend_request_logic(sender_username, receiver_username)
 
 # ✅ Accept Request
-@router.post("/accept/{sender_id}")
-async def accept_friend_request(receiver_id: str = Query(...), sender_id: str = None):
-    return await accept_friend_request_logic(receiver_id, sender_id)
+@router.post("/accept/{sender_username}")
+def accept_friend_request(sender_username: str, receiver_username: str = Query(...)):
+    return accept_friend_request_logic(receiver_username, sender_username)
 
 # ✅ Reject Request
-@router.post("/reject/{sender_id}")
-async def reject_friend_request(receiver_id: str = Query(...), sender_id: str = None):
-    return await reject_friend_request_logic(receiver_id, sender_id)
+@router.post("/reject/{sender_username}")
+def reject_friend_request(sender_username: str, receiver_username: str = Query(...)):
+    return reject_friend_request_logic(receiver_username, sender_username)
 
 # ✅ Get Pending Requests
 @router.get("/requests")
-async def get_pending_requests(user_id: str = Query(...)):
-    return await get_pending_requests_logic(user_id)
+def get_pending_requests(username: str = Query(...)):
+    try:
+        return get_pending_requests_logic(username)
+    except Exception as e:
+        print(f"❌ Error in get_pending_requests: {str(e)}")
+        raise
 
 # ✅ Get Friends List
 @router.get("/")
-async def get_friends(user_id: str = Query(...)):
-    return await get_friends_logic(user_id)
+def get_friends(username: str = Query(...)):
+    try:
+        return get_friends_logic(username)
+    except Exception as e:
+        print(f"❌ Error in get_friends: {str(e)}")
+        raise
+
+# ✅ Get All Users (for friend requests)
+@router.get("/users")
+def get_all_users(username: str = Query(...)):
+    try:
+        return get_all_users_logic(username)
+    except Exception as e:
+        print(f"❌ Error in get_all_users: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise
