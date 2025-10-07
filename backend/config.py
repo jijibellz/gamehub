@@ -15,8 +15,8 @@ if not host or not password:
 
 encoded_pw = quote_plus(password)
 
-# Aura requires neo4j+s:// not bolt+s://
-neo4j_url = f"neo4j+s://{user}:{encoded_pw}@{host}:7687"
+# ❌ Remove :7687 — Aura with neo4j+s:// works over 443
+neo4j_url = f"neo4j+s://{user}:{encoded_pw}@{host}"
 
 neomodel_config.DATABASE_URL = neo4j_url
 print("[ℹ️] Connecting to Neo4j at:", neo4j_url)
