@@ -1,22 +1,16 @@
-import config
-import os
-from urllib.parse import quote_plus
 from neomodel import config as neomodel_config
-from dotenv import load_dotenv
+import os
 
-load_dotenv()
-
-host = os.getenv("NEO4J_HOST")
+host = os.getenv("NEO4J_HOST")  # e.g., c0698f7d.databases.neo4j.io
 user = os.getenv("NEO4J_USER", "neo4j")
 password = os.getenv("NEO4J_PASSWORD")
 
 if not host or not password:
     raise ValueError("NEO4J_HOST or NEO4J_PASSWORD missing")
 
-encoded_pw = quote_plus(password)
+# ❌ Don't encode manually
+# ❌ Don't add extra neo4j+s:// inside credentials
 
-# ❌ Remove :7687 — Aura with neo4j+s:// works over 443
-neo4j_url = f"neo4j+s://{user}:{encoded_pw}@{host}"
-
-neomodel_config.DATABASE_URL = neo4j_url
-print("[ℹ️] Connecting to Neo4j at:", neo4j_url)
+# Correct format for Aura:
+neomodel_config.DATABASE_URL = f"neo4j+s://{user}:{password}@{host}"
+print("[ℹ️] Connecting to Neo4j at:", neomodel_config.DATABASE_URL)
