@@ -30,3 +30,7 @@ typing-inspection==0.4.1
 typing_extensions==4.15.0
 uvicorn==0.37.0
 yarl==1.20.1
+python-jose[cryptography]
+python-multipart
+aiofiles
+requests
