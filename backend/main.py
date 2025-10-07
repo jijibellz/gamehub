@@ -6,7 +6,7 @@ import config  # sets neomodel_config.DATABASE_URL BEFORE any db use
 
 from fastapi import FastAPI
 from routers import users, friends, games, servers, chat, direct_messages
-from neomodel import db
+from neomodel import db, config as neoconfig
 from neo4j.exceptions import ServiceUnavailable, AuthError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -15,9 +15,9 @@ app = FastAPI(title="🎮 GameHub Backend")
 
 # ✅ CORS setup
 origins = [
-    "http://localhost:5173",   # Vite frontend
+    "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "http://localhost:5174",   # Alternative port
+    "http://localhost:5174",
     "http://127.0.0.1:5174",
 ]
 
@@ -44,7 +44,6 @@ app.include_router(games.router, prefix="/games", tags=["Games"])
 app.include_router(servers.router)
 app.include_router(chat.router)
 
-
 # 💓 Keep Neo4j Aura alive
 def keep_neo4j_alive():
     """Background thread to prevent Aura from closing idle connections."""
@@ -52,25 +51,28 @@ def keep_neo4j_alive():
         try:
             db.cypher_query("RETURN 1")
             print("🩵 Neo4j heartbeat OK")
-        except ServiceUnavailable as e:
-            print("⚠️ Lost connection to Neo4j Aura, reconnecting:", e)
+        except Exception as e:
+            print("⚠️ Lost connection to Neo4j Aura, attempting reconnect:", e)
             try:
-                db.set_connection(config.neomodel_config.DATABASE_URL)
+                neoconfig.DATABASE_URL = os.getenv("NEO4J_URI") or config.neomodel_config.DATABASE_URL
+                db.set_connection(neoconfig.DATABASE_URL)
                 print("✅ Reconnected to Neo4j Aura!")
             except Exception as err:
                 print("💀 Reconnect failed:", err)
         time.sleep(120)  # every 2 minutes
 
 
-# ✅ Neo4j startup check
+# ✅ Neo4j startup check (safe on Render)
 @app.on_event("startup")
 def on_startup():
     print("\n🕹️ GameHub backend starting up…")
+
     try:
         db.cypher_query("RETURN 1")
         print("[✅] Connected to Neo4j database.")
-    except (ServiceUnavailable, AuthError, ValueError) as e:
-        print("[❌] Neo4j connection failed:", e)
+    except (ServiceUnavailable, AuthError, ValueError, Exception) as e:
+        print("[⚠️] Neo4j connection not available yet — continuing startup.")
+        print(f"    Reason: {e}")
 
     if os.path.exists(UPLOADS_DIR):
         print(f"[📁] Uploads directory ready at: {os.path.abspath(UPLOADS_DIR)}")
