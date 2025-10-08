@@ -5,15 +5,18 @@ import threading
 import config  # sets neomodel_config.DATABASE_URL BEFORE any db use
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from routers import users, friends, games, servers, chat, direct_messages
 from neomodel import db, config as neoconfig
 from neo4j.exceptions import ServiceUnavailable, AuthError
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="🎮 GameHub Backend")
 
-# ✅ CORS setup
+# =========================
+# CORS setup
+# =========================
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -24,24 +27,32 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://gamehubjiji-044p.onrender.com",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173"
-    ],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ✅ Create uploads directory if missing
+# =========================
+# Uploads setup
+# =========================
 UPLOADS_DIR = "uploads"
 os.makedirs(UPLOADS_DIR, exist_ok=True)
-
-# ✅ Serve uploaded files (voice, images, etc.)
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
-# ✅ Include routers
+# =========================
+# Serve React frontend
+# =========================
+frontend_build_dir = os.path.join(os.path.dirname(__file__), "frontend", "build")
+if os.path.exists(frontend_build_dir):
+    # Static files (JS, CSS, images)
+    app.mount("/static", StaticFiles(directory=os.path.join(frontend_build_dir, "static")), name="static")
+else:
+    print("[⚠️] React build folder not found. Run `npm run build` in the frontend folder.")
+
+# =========================
+# Include API routers
+# =========================
 app.include_router(users.router)
 app.include_router(friends.router, prefix="/api")
 app.include_router(direct_messages.router, prefix="/api")
@@ -49,9 +60,10 @@ app.include_router(games.router, prefix="/games", tags=["Games"])
 app.include_router(servers.router)
 app.include_router(chat.router)
 
-# 💓 Keep Neo4j Aura alive
+# =========================
+# Neo4j heartbeat thread
+# =========================
 def keep_neo4j_alive():
-    """Background thread to prevent Aura from closing idle connections."""
     while True:
         try:
             db.cypher_query("RETURN 1")
@@ -66,8 +78,9 @@ def keep_neo4j_alive():
                 print("💀 Reconnect failed:", err)
         time.sleep(120)  # every 2 minutes
 
-
-# ✅ Neo4j startup check (safe on Render)
+# =========================
+# Startup event
+# =========================
 @app.on_event("startup")
 def on_startup():
     print("\n🕹️ GameHub backend starting up…")
@@ -84,11 +97,25 @@ def on_startup():
     else:
         print("[⚠️] Uploads directory missing!")
 
-    # 💓 Start heartbeat thread
     threading.Thread(target=keep_neo4j_alive, daemon=True).start()
 
-
-# ✅ Root endpoint
+# =========================
+# Root API endpoint
+# =========================
 @app.get("/")
 def root():
+    # Serve React index if build exists
+    index_file = os.path.join(frontend_build_dir, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
     return {"message": "GameHub backend running 🎮"}
+
+# =========================
+# Catch-all route for React Router
+# =========================
+@app.get("/{full_path:path}")
+def serve_react_app(full_path: str):
+    index_file = os.path.join(frontend_build_dir, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
+    return {"error": "React app not built yet"}
