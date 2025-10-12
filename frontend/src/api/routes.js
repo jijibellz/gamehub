@@ -3,15 +3,15 @@ export const SOCKET_SERVER_URL = import.meta.env.VITE_SOCKET_SERVER_URL || "http
 
 export const ROUTES = {
   // users
-  REGISTER: `${API_BASE_URL}/api/users/users/register`,
-  LOGIN: `${API_BASE_URL}/api/users/users/login`,
+  REGISTER: `${API_BASE_URL}/api/users/register`,
+  LOGIN: `${API_BASE_URL}/api/users/login`,
   
   // profile
-  GET_PROFILE: `${API_BASE_URL}/api/users/users/me/profile`,
-  UPDATE_PROFILE: `${API_BASE_URL}/api/users/users/me/profile`,
-  UPLOAD_PROFILE_PICTURE: `${API_BASE_URL}/api/users/users/me/profile-picture`,
-  DELETE_PROFILE_PICTURE: `${API_BASE_URL}/api/users/users/me/profile-picture`,
-  CHANGE_PASSWORD: `${API_BASE_URL}/api/users/users/me/change-password`,
+  GET_PROFILE: `${API_BASE_URL}/api/users/me/profile`,
+  UPDATE_PROFILE: `${API_BASE_URL}/api/users/me/profile`,
+  UPLOAD_PROFILE_PICTURE: `${API_BASE_URL}/api/users/me/profile-picture`,
+  DELETE_PROFILE_PICTURE: `${API_BASE_URL}/api/users/me/profile-picture`,
+  CHANGE_PASSWORD: `${API_BASE_URL}/api/users/me/change-password`,
 
   // games
   GAMES_LIST: `${API_BASE_URL}/games/`,
