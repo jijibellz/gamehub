@@ -10,6 +10,7 @@ from neomodel import db, config as neoconfig
 from neo4j.exceptions import ServiceUnavailable, AuthError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from socketio_server import create_socketio_app
 
 app = FastAPI(title="🎮 GameHub Backend")
 
@@ -100,3 +101,8 @@ def on_startup():
 @app.get("/")
 def root():
     return {"message": "GameHub backend running 🎮"}
+
+
+# ✅ Wrap FastAPI with Socket.IO
+# This must be at the end of the file, after all routes are registered
+socket_app = create_socketio_app(app)
