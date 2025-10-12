@@ -1,4 +1,3 @@
-# main.py
 import os
 import time
 import threading
@@ -12,23 +11,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from socketio_server import create_socketio_app
 
-app = FastAPI(title="🎮 GameHub Backend")
+
+# Create the FastAPI instance first
+fastapi_app = FastAPI(title="🎮 GameHub Backend")
 
 # ✅ CORS setup
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:5174",
-    "http://127.0.0.1:5174",
-    "https://gamehubjiji-044p.onrender.com", 
-]
-
-app.add_middleware(
+fastapi_app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://gamehubjiji-044p.onrender.com",
         "http://localhost:5173",
-        "http://127.0.0.1:5173"
+        "http://127.0.0.1:5173",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -40,15 +33,16 @@ UPLOADS_DIR = "uploads"
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 # ✅ Serve uploaded files (voice, images, etc.)
-app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+fastapi_app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
 # ✅ Include routers
-app.include_router(users.router)
-app.include_router(friends.router, prefix="/api")
-app.include_router(direct_messages.router, prefix="/api")
-app.include_router(games.router, prefix="/games", tags=["Games"])
-app.include_router(servers.router)
-app.include_router(chat.router)
+fastapi_app.include_router(users.router)
+fastapi_app.include_router(friends.router, prefix="/api")
+fastapi_app.include_router(direct_messages.router, prefix="/api")
+fastapi_app.include_router(games.router, prefix="/games", tags=["Games"])
+fastapi_app.include_router(servers.router)
+fastapi_app.include_router(chat.router)
+
 
 # 💓 Keep Neo4j Aura alive
 def keep_neo4j_alive():
@@ -60,24 +54,19 @@ def keep_neo4j_alive():
         except Exception as e:
             print(f"⚠️ Lost connection to Neo4j Aura: {type(e).__name__}")
             try:
-                # Force close old connection
                 db.close_connection()
                 time.sleep(2)
-                
-                # Reconnect using the configured URL
                 connection_url = os.getenv("NEO4J_URI") or neoconfig.DATABASE_URL
                 db.set_connection(connection_url)
-                
-                # Test the new connection
                 db.cypher_query("RETURN 1")
                 print("✅ Reconnected to Neo4j Aura!")
             except Exception as err:
                 print(f"💀 Reconnect failed: {type(err).__name__} - {err}")
-        time.sleep(90)  # every 90 seconds
+        time.sleep(90)
 
 
 # ✅ Neo4j startup check (safe on Render)
-@app.on_event("startup")
+@fastapi_app.on_event("startup")
 def on_startup():
     print("\n🕹️ GameHub backend starting up…")
 
@@ -93,16 +82,15 @@ def on_startup():
     else:
         print("[⚠️] Uploads directory missing!")
 
-    # 💓 Start heartbeat thread
     threading.Thread(target=keep_neo4j_alive, daemon=True).start()
 
 
 # ✅ Root endpoint
-@app.get("/")
+@fastapi_app.get("/")
 def root():
     return {"message": "GameHub backend running 🎮"}
 
 
 # ✅ Wrap FastAPI with Socket.IO
-# This must be at the end of the file, after all routes are registered
-socket_app = create_socketio_app(app)
+# This must be the *final* app that Render runs
+app = create_socketio_app(fastapi_app)
