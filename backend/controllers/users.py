@@ -10,7 +10,7 @@ from passlib.context import CryptContext
 import uuid
 
 from models import User
-from cloudinary_config import upload_image, delete_image, extract_public_id_from_url
+from cloudinary_config import upload_image, delete_image, extract_public_id_from_url, CLOUDINARY_ENABLED
 
 router = APIRouter(tags=["Users"])
 
@@ -201,6 +201,14 @@ async def upload_profile_picture(
 ):
     """Upload a profile picture for the current user to Cloudinary"""
     print(f"📸 Profile picture upload request from: {current_user.username}")
+    
+    # Check if Cloudinary is configured
+    if not CLOUDINARY_ENABLED:
+        raise HTTPException(
+            status_code=503, 
+            detail="Profile picture upload is temporarily unavailable. Cloudinary credentials are not configured. Please contact the administrator."
+        )
+    
     try:
         # Validate file type
         allowed_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]

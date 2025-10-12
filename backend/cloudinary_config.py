@@ -7,13 +7,24 @@ import cloudinary
 import cloudinary.uploader
 import cloudinary.api
 
-# Configure Cloudinary with environment variables
-cloudinary.config(
-    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
-    api_key=os.getenv("CLOUDINARY_API_KEY"),
-    api_secret=os.getenv("CLOUDINARY_API_SECRET"),
-    secure=True
-)
+# Check if Cloudinary credentials are set
+CLOUDINARY_ENABLED = all([
+    os.getenv("CLOUDINARY_CLOUD_NAME"),
+    os.getenv("CLOUDINARY_API_KEY"),
+    os.getenv("CLOUDINARY_API_SECRET")
+])
+
+if CLOUDINARY_ENABLED:
+    # Configure Cloudinary with environment variables
+    cloudinary.config(
+        cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+        api_key=os.getenv("CLOUDINARY_API_KEY"),
+        api_secret=os.getenv("CLOUDINARY_API_SECRET"),
+        secure=True
+    )
+    print("✅ Cloudinary configured successfully")
+else:
+    print("⚠️ Cloudinary credentials not set - profile pictures will use local storage")
 
 def upload_image(file_bytes, public_id=None, folder="gamehub/profile_pictures"):
     """
@@ -27,6 +38,9 @@ def upload_image(file_bytes, public_id=None, folder="gamehub/profile_pictures"):
     Returns:
         dict: Upload result with 'url' and 'public_id'
     """
+    if not CLOUDINARY_ENABLED:
+        raise Exception("Cloudinary is not configured. Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET environment variables.")
+    
     try:
         upload_result = cloudinary.uploader.upload(
             file_bytes,
@@ -59,6 +73,10 @@ def delete_image(public_id):
     Returns:
         dict: Deletion result
     """
+    if not CLOUDINARY_ENABLED:
+        print("⚠️ Cloudinary not configured, skipping delete")
+        return {"result": "not_configured"}
+    
     try:
         result = cloudinary.uploader.destroy(public_id)
         return result
