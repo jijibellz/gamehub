@@ -11,7 +11,7 @@ import uuid
 
 from models import User
 
-router = APIRouter(prefix="/users", tags=["Users"])
+router = APIRouter(tags=["Users"])
 
 # ===============================
 # Security setup
