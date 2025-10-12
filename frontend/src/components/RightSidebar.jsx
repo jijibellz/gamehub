@@ -289,7 +289,7 @@ export default function RightSidebar() {
               sx={{ position: "absolute", bottom: -5, right: -5, bgcolor: "white", color: "#1e1f22", width: 28, height: 28, "&:hover": { bgcolor: "#e0e0e0" } }}
               disabled={uploading}
             >
-              {uploading ? <CircularProgress size={16} /> : <PhotoCameraIcon sx={{ fontSize: 16 }} />}
+              {uploading ? <CircularProgress size={16} /> : <PhotoCamera sx={{ fontSize: 16 }} />}
               <input type="file" hidden accept="image/*" onChange={handleProfilePictureUpload} />
             </IconButton>
           </Box>
