@@ -57,14 +57,22 @@ def keep_neo4j_alive():
             db.cypher_query("RETURN 1")
             print("🩵 Neo4j heartbeat OK")
         except Exception as e:
-            print("⚠️ Lost connection to Neo4j Aura, attempting reconnect:", e)
+            print(f"⚠️ Lost connection to Neo4j Aura: {type(e).__name__}")
             try:
-                neoconfig.DATABASE_URL = os.getenv("NEO4J_URI") or config.neomodel_config.DATABASE_URL
-                db.set_connection(neoconfig.DATABASE_URL)
+                # Force close old connection
+                db.close_connection()
+                time.sleep(2)
+                
+                # Reconnect using the configured URL
+                connection_url = os.getenv("NEO4J_URI") or neoconfig.DATABASE_URL
+                db.set_connection(connection_url)
+                
+                # Test the new connection
+                db.cypher_query("RETURN 1")
                 print("✅ Reconnected to Neo4j Aura!")
             except Exception as err:
-                print("💀 Reconnect failed:", err)
-        time.sleep(120)  # every 2 minutes
+                print(f"💀 Reconnect failed: {type(err).__name__} - {err}")
+        time.sleep(90)  # every 90 seconds
 
 
 # ✅ Neo4j startup check (safe on Render)
