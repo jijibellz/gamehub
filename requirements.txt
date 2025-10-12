@@ -35,3 +35,4 @@ python-multipart
 aiofiles
 requests
 python-socketio==5.11.4
+cloudinary==1.41.0

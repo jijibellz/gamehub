@@ -10,6 +10,7 @@ from passlib.context import CryptContext
 import uuid
 
 from models import User
+from cloudinary_config import upload_image, delete_image, extract_public_id_from_url
 
 router = APIRouter(tags=["Users"])
 
@@ -198,7 +199,7 @@ async def upload_profile_picture(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user)
 ):
-    """Upload a profile picture for the current user"""
+    """Upload a profile picture for the current user to Cloudinary"""
     print(f"📸 Profile picture upload request from: {current_user.username}")
     try:
         # Validate file type
@@ -206,32 +207,29 @@ async def upload_profile_picture(
         if file.content_type not in allowed_types:
             raise HTTPException(status_code=400, detail="Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.")
         
-        # Create profile_pictures directory
-        uploads_dir = "uploads/profile_pictures"
-        os.makedirs(uploads_dir, exist_ok=True)
+        # Read file bytes
+        file_bytes = await file.read()
         
-        # Generate unique filename
-        file_extension = file.filename.split(".")[-1]
-        unique_filename = f"{current_user.username}_{uuid.uuid4().hex[:8]}.{file_extension}"
-        file_path = os.path.join(uploads_dir, unique_filename)
+        # Delete old profile picture from Cloudinary if exists
+        if current_user.profile_picture and 'cloudinary.com' in current_user.profile_picture:
+            try:
+                old_public_id = extract_public_id_from_url(current_user.profile_picture)
+                if old_public_id:
+                    delete_image(old_public_id)
+                    print(f"🗑️ Deleted old profile picture: {old_public_id}")
+            except Exception as e:
+                print(f"⚠️ Could not delete old image: {e}")
         
-        # Delete old profile picture if exists
-        if current_user.profile_picture:
-            old_file_path = current_user.profile_picture.replace("/uploads/", "uploads/")
-            if os.path.exists(old_file_path):
-                try:
-                    os.remove(old_file_path)
-                except:
-                    pass
-        
-        # Save new file
-        with open(file_path, "wb") as f:
-            f.write(await file.read())
+        # Upload to Cloudinary
+        public_id = f"{current_user.username}_{uuid.uuid4().hex[:8]}"
+        upload_result = upload_image(file_bytes, public_id=public_id)
         
         # Update user's profile picture URL
-        profile_picture_url = f"/uploads/profile_pictures/{unique_filename}"
+        profile_picture_url = upload_result['url']
         current_user.profile_picture = profile_picture_url
         current_user.save()
+        
+        print(f"✅ Profile picture uploaded to Cloudinary: {profile_picture_url}")
         
         return {
             "detail": "Profile picture uploaded successfully",
@@ -248,15 +246,20 @@ async def upload_profile_picture(
 # Delete profile picture
 @router.delete("/me/profile-picture")
 def delete_profile_picture(current_user: User = Depends(get_current_user)):
-    """Delete the current user's profile picture"""
+    """Delete the current user's profile picture from Cloudinary"""
     try:
         if not current_user.profile_picture:
             raise HTTPException(status_code=404, detail="No profile picture to delete")
         
-        # Delete file from filesystem
-        file_path = current_user.profile_picture.replace("/uploads/", "uploads/")
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        # Delete from Cloudinary if it's a Cloudinary URL
+        if 'cloudinary.com' in current_user.profile_picture:
+            try:
+                public_id = extract_public_id_from_url(current_user.profile_picture)
+                if public_id:
+                    delete_image(public_id)
+                    print(f"🗑️ Deleted profile picture from Cloudinary: {public_id}")
+            except Exception as e:
+                print(f"⚠️ Could not delete from Cloudinary: {e}")
         
         # Remove from database
         current_user.profile_picture = None

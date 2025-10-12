@@ -17,6 +17,7 @@ import { ROUTES, API_BASE_URL, SOCKET_SERVER_URL } from "../api/routes";
 import Picker from "emoji-picker-react";
 import VideoCallComponent from "./VideoCallComponent";
 import { io } from "socket.io-client";
+import { getProfilePictureUrl } from "../utils/imageUtils";
 
 export default function ServerChat({ serverName, channelName = "general", currentUser }) {
   const [messages, setMessages] = useState([]);
@@ -338,7 +339,7 @@ export default function ServerChat({ serverName, channelName = "general", curren
                     <Box key={msg.id || msg.timestamp} mb={2} display="flex" gap={1.5}>
                       <Avatar 
                         sx={{ width: 40, height: 40, bgcolor: "#5865f2" }}
-                        src={msg.profile_picture ? `${API_BASE_URL}${msg.profile_picture}` : ""}
+                        src={getProfilePictureUrl(msg.profile_picture)}
                       >
                         {msg.user?.[0]?.toUpperCase()}
                       </Avatar>
@@ -431,7 +432,7 @@ export default function ServerChat({ serverName, channelName = "general", curren
                   <Box key={msg.id || msg.timestamp} mb={3} display="flex" gap={1.5}>
                     <Avatar 
                       sx={{ width: 40, height: 40, bgcolor: "#5865f2" }}
-                      src={msg.profile_picture ? `${API_BASE_URL}${msg.profile_picture}` : ""}
+                      src={getProfilePictureUrl(msg.profile_picture)}
                     >
                       {msg.user?.[0]?.toUpperCase()}
                     </Avatar>

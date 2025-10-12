@@ -19,11 +19,13 @@ import {
   ListItemText
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
-import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
+import PhotoCamera from "@mui/icons-material/PhotoCamera";
+import DeleteIcon from "@mui/icons-material/Delete";
 import SearchIcon from "@mui/icons-material/Search";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import axios from "axios";
 import { ROUTES, API_BASE_URL } from "../api/routes";
+import { getProfilePictureUrl } from "../utils/imageUtils";
 
 export default function RightSidebar() {
   const [user, setUser] = useState(null);
@@ -166,7 +168,7 @@ export default function RightSidebar() {
     );
   }
 
-  const profilePicUrl = user.profile_picture ? `${API_BASE_URL}${user.profile_picture}` : "";
+  const profilePicUrl = getProfilePictureUrl(user.profile_picture);
 
   return (
     <>
@@ -259,7 +261,7 @@ export default function RightSidebar() {
                     }}
                   >
                     <ListItemAvatar>
-                      <Avatar src={result.profile_picture ? `${API_BASE_URL}${result.profile_picture}` : ""}>
+                      <Avatar src={getProfilePictureUrl(result.profile_picture)}>
                         {result.username[0].toUpperCase()}
                       </Avatar>
                     </ListItemAvatar>

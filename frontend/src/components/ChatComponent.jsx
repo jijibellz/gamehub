@@ -8,6 +8,7 @@ import InsertPhotoIcon from "@mui/icons-material/InsertPhoto";
 import axios from "axios";
 import { API_BASE_URL, ROUTES } from "../api/routes";
 import Picker from "emoji-picker-react";
+import { getProfilePictureUrl } from "../utils/imageUtils";
 
 export default function ChatComponent({ currentUser }) {
   const [users, setUsers] = useState([]);
@@ -225,11 +226,7 @@ export default function ChatComponent({ currentUser }) {
               borderRadius={1}
             >
               <Avatar
-                src={
-                  req.profile_picture
-                    ? `${API_BASE_URL}${req.profile_picture}`
-                    : ""
-                }
+                src={getProfilePictureUrl(req.profile_picture)}
                 sx={{ width: 40, height: 40 }}
               >
                 {req.username[0].toUpperCase()}
@@ -288,11 +285,7 @@ export default function ChatComponent({ currentUser }) {
               }}
             >
               <Avatar
-                src={
-                  friend.profile_picture
-                    ? `${API_BASE_URL}${friend.profile_picture}`
-                    : ""
-                }
+                src={getProfilePictureUrl(friend.profile_picture)}
                 sx={{ width: 40, height: 40 }}
               >
                 {friend.username[0].toUpperCase()}
@@ -366,11 +359,7 @@ export default function ChatComponent({ currentUser }) {
             borderRadius={1}
           >
             <Avatar
-              src={
-                user.profile_picture
-                  ? `${API_BASE_URL}${user.profile_picture}`
-                  : ""
-              }
+              src={getProfilePictureUrl(user.profile_picture)}
               sx={{ width: 40, height: 40 }}
             >
               {user.username[0].toUpperCase()}
@@ -412,7 +401,7 @@ export default function ChatComponent({ currentUser }) {
           <>
             {/* Chat Header */}
             <Box p={2} display="flex" alignItems="center" gap={2} sx={{ borderBottom: "1px solid #202225" }}>
-              <Avatar src={selectedFriend.profile_picture ? `${API_BASE_URL}${selectedFriend.profile_picture}` : ""} sx={{ width: 48, height: 48 }}>
+              <Avatar src={getProfilePictureUrl(selectedFriend.profile_picture)} sx={{ width: 48, height: 48 }}>
                 {selectedFriend.username[0].toUpperCase()}
               </Avatar>
               <Box>
