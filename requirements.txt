@@ -34,3 +34,4 @@ python-jose[cryptography]
 python-multipart
 aiofiles
 requests
+python-socketio==5.11.4
