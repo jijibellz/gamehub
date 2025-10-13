@@ -1,4 +1,3 @@
-// components/AuthForm.jsx
 import { useState } from "react";
 import axios from "axios";
 import { ROUTES } from "../api/routes";
@@ -27,7 +26,6 @@ export default function AuthForm({ isLogin, onSuccess }) {
     } catch (err) {
       console.error(err);
       let errorMsg = "❌ Something went wrong";
-
       if (err.response?.data?.detail) {
         const detail = err.response.data.detail;
         if (typeof detail === "string") {
@@ -43,62 +41,73 @@ export default function AuthForm({ isLogin, onSuccess }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="w-[380px] p-8 rounded-2xl bg-[#1f1f23] shadow-2xl border border-[#2f3136] flex flex-col gap-5 transition-all duration-300"
+      className="bg-[#2f3136] p-8 rounded-2xl shadow-2xl w-96 space-y-5 text-white"
     >
-      <h2 className="text-center text-2xl font-semibold text-gray-100 tracking-tight">
-        {isLogin ? "Log In" : "Sign Up"}
+      <h2 className="text-2xl font-semibold text-center mb-2">
+        {isLogin ? "Welcome back!" : "Create an account"}
       </h2>
+      <p className="text-gray-400 text-center mb-4">
+        {isLogin
+          ? "We're so excited to see you again!"
+          : "Join us and start connecting!"}
+      </p>
 
-      {/* Username */}
-      <div>
-        <input
-          type="text"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          className="w-full px-4 py-3 rounded-md bg-[#2b2d31] text-gray-200 placeholder-gray-400 border border-transparent focus:outline-none focus:ring-2 focus:ring-[#5865f2] transition"
-          required
-        />
-      </div>
-
-      {/* Email only when registering */}
-      {!isLogin && (
+      <div className="space-y-4">
         <div>
+          <label className="text-xs uppercase tracking-wide text-gray-400 block mb-1">
+            Username
+          </label>
           <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-3 rounded-md bg-[#2b2d31] text-gray-200 placeholder-gray-400 border border-transparent focus:outline-none focus:ring-2 focus:ring-[#5865f2] transition"
+            type="text"
+            placeholder="Enter username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className="w-full px-4 py-2 bg-[#202225] border border-transparent rounded-md focus:border-white focus:outline-none text-white placeholder-gray-500 transition"
             required
           />
         </div>
-      )}
 
-      {/* Password */}
-      <div>
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full px-4 py-3 rounded-md bg-[#2b2d31] text-gray-200 placeholder-gray-400 border border-transparent focus:outline-none focus:ring-2 focus:ring-[#5865f2] transition"
-          required
-        />
+        {!isLogin && (
+          <div>
+            <label className="text-xs uppercase tracking-wide text-gray-400 block mb-1">
+              Email
+            </label>
+            <input
+              type="email"
+              placeholder="Enter email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-2 bg-[#202225] border border-transparent rounded-md focus:border-white focus:outline-none text-white placeholder-gray-500 transition"
+              required
+            />
+          </div>
+        )}
+
+        <div>
+          <label className="text-xs uppercase tracking-wide text-gray-400 block mb-1">
+            Password
+          </label>
+          <input
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full px-4 py-2 bg-[#202225] border border-transparent rounded-md focus:border-white focus:outline-none text-white placeholder-gray-500 transition"
+            required
+          />
+        </div>
       </div>
 
-      {/* Button */}
       <button
         type="submit"
-        className="w-full py-3 rounded-md bg-[#5865f2] text-white font-semibold hover:bg-[#4752c4] active:scale-[0.98] transition-all duration-150"
+        className="w-full bg-white text-black py-2 rounded-md font-semibold hover:bg-gray-200 transition mt-3"
       >
         {isLogin ? "Login" : "Register"}
       </button>
 
-      {/* Status Message */}
       {message && (
         <p
-          className={`text-center text-sm ${
+          className={`mt-3 text-center text-sm ${
             message.startsWith("✅") || message.startsWith("🎉")
               ? "text-green-400"
               : "text-red-400"
