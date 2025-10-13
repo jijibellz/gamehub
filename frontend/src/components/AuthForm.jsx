@@ -1,7 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { ROUTES } from "../api/routes";
-import "./AuthForm.css";
+import "../theme/AuthForm.css";
 
 export default function AuthForm({ isLogin, onSuccess }) {
   const [username, setUsername] = useState("");
