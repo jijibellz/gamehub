@@ -1,26 +1,28 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import AuthForm from "../components/AuthForm";
 
-export default function AuthPage({ isLogin, onSuccess }) {
+export default function AuthPage() {
+  const [isLogin, setIsLogin] = useState(true);
+  const navigate = useNavigate();
+
+  const handleSuccess = () => {
+    navigate("/feed");
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#202225] text-white">
-      <div className="flex flex-col items-center justify-center space-y-6">
-        <AuthForm isLogin={isLogin} onSuccess={onSuccess} />
-        <p className="text-sm text-gray-400">
-          {isLogin ? (
-            <>
-              Need an account?{" "}
-              <a href="/register" className="text-white hover:underline">
-                Register
-              </a>
-            </>
-          ) : (
-            <>
-              Already have an account?{" "}
-              <a href="/login" className="text-white hover:underline">
-                Login
-              </a>
-            </>
-          )}
+    <div className="min-h-screen flex items-center justify-center bg-[#1e1f22]">
+      <div className="flex flex-col items-center space-y-6">
+        <AuthForm isLogin={isLogin} onSuccess={handleSuccess} />
+
+        <p className="text-gray-400 text-sm mt-4">
+          {isLogin ? "Need an account? " : "Already have an account? "}
+          <button
+            onClick={() => setIsLogin(!isLogin)}
+            className="text-white hover:underline transition"
+          >
+            {isLogin ? "Register" : "Login"}
+          </button>
         </p>
       </div>
     </div>

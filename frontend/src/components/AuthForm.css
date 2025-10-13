@@ -1,0 +1,106 @@
+/* === Discord-style UI with monotone color palette === */
+
+.auth-page {
+  height: 100vh;
+  width: 100vw;
+  background-color: #1e1f22; /* dark background */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+  color: white;
+}
+
+/* Center card */
+form {
+  background-color: #313338; /* card background */
+  border-radius: 8px;
+  padding: 2rem;
+  width: 400px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+  border: 1px solid #3f4147;
+}
+
+h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 0.5rem;
+  color: #b5bac1;
+}
+
+p {
+  text-align: center;
+  color: #b5bac1;
+  font-size: 0.9rem;
+}
+
+/* Input fields */
+input {
+  display: block;
+  width: 179%;
+  background-color: #1e1f22;
+  border: 1px solid #3f4147;
+  color: white;
+  border-radius: 4px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border 0.2s, background-color 0.2s;
+  margin-left: 0; /* ensures it hugs the left */
+}
+
+
+input::placeholder {
+  color: #7c7f84;
+}
+
+input:focus {
+  border: 1px solid white;
+  background-color: #2b2d31;
+}
+
+/* Button */
+button {
+  width: 100%;
+  background-color: white;
+  color: black;
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  padding: 0.6rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 1rem;
+}
+
+button:hover {
+  background-color: #d3d3d3;
+}
+
+/* Labels */
+label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #b5bac1;
+  letter-spacing: 0.03em;
+  margin-bottom: 4px;
+  display: block;
+}
+
+/* Message */
+.message-success {
+  color: #43b581;
+}
+
+.message-error {
+  color: #f04747;
+}
+
+/* Removes that weird white frame some browsers show */
+body,
+html {
+  margin: 0;
+  padding: 0;
+  background: #1e1f22;
+}

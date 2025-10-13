@@ -1,6 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { ROUTES } from "../api/routes";
+import "./AuthForm.css";
 
 export default function AuthForm({ isLogin, onSuccess }) {
   const [username, setUsername] = useState("");
@@ -39,83 +40,85 @@ export default function AuthForm({ isLogin, onSuccess }) {
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="bg-[#2f3136] p-8 rounded-2xl shadow-2xl w-96 space-y-5 text-white"
-    >
-      <h2 className="text-2xl font-semibold text-center mb-2">
-        {isLogin ? "Welcome back!" : "Create an account"}
-      </h2>
-      <p className="text-gray-400 text-center mb-4">
-        {isLogin
-          ? "We're so excited to see you again!"
-          : "Join us and start connecting!"}
-      </p>
+  <form
+    onSubmit={handleSubmit}
+    className="auth-form bg-[#313338] text-white p-8 rounded-lg shadow-2xl border border-[#3f4147]"
+  >
+    <h2 className="text-2xl font-bold text-center mb-1">
+      {isLogin ? "Welcome back!" : "Create an account"}
+    </h2>
+    <p className="text-gray-400 text-center mb-6 text-sm">
+      {isLogin
+        ? "We’re so excited to see you again!"
+        : "Join us and start connecting!"}
+    </p>
 
-      <div className="space-y-4">
-        <div>
-          <label className="text-xs uppercase tracking-wide text-gray-400 block mb-1">
-            Username
-          </label>
-          <input
-            type="text"
-            placeholder="Enter username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="w-full px-4 py-2 bg-[#202225] border border-transparent rounded-md focus:border-white focus:outline-none text-white placeholder-gray-500 transition"
-            required
-          />
-        </div>
-
-        {!isLogin && (
-          <div>
-            <label className="text-xs uppercase tracking-wide text-gray-400 block mb-1">
-              Email
-            </label>
-            <input
-              type="email"
-              placeholder="Enter email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 bg-[#202225] border border-transparent rounded-md focus:border-white focus:outline-none text-white placeholder-gray-500 transition"
-              required
-            />
-          </div>
-        )}
-
-        <div>
-          <label className="text-xs uppercase tracking-wide text-gray-400 block mb-1">
-            Password
-          </label>
-          <input
-            type="password"
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-2 bg-[#202225] border border-transparent rounded-md focus:border-white focus:outline-none text-white placeholder-gray-500 transition"
-            required
-          />
-        </div>
+    {/* Left align form fields */}
+    <div className="form-fields flex flex-col space-y-4 items-start">
+      {/* Username */}
+      <div>
+        <label className="block text-xs uppercase text-gray-400 mb-1">
+          Username
+        </label>
+        <input
+          type="text"
+          placeholder="Enter username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          required
+          className="auth-input"
+        />
       </div>
 
-      <button
-        type="submit"
-        className="w-full bg-white text-black py-2 rounded-md font-semibold hover:bg-gray-200 transition mt-3"
-      >
-        {isLogin ? "Login" : "Register"}
-      </button>
-
-      {message && (
-        <p
-          className={`mt-3 text-center text-sm ${
-            message.startsWith("✅") || message.startsWith("🎉")
-              ? "text-green-400"
-              : "text-red-400"
-          }`}
-        >
-          {message}
-        </p>
+      {/* Email (only register) */}
+      {!isLogin && (
+        <div>
+          <label className="block text-xs uppercase text-gray-400 mb-1">
+            Email
+          </label>
+          <input
+            type="email"
+            placeholder="Enter email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="auth-input"
+          />
+        </div>
       )}
-    </form>
-  );
+
+      {/* Password */}
+      <div>
+        <label className="block text-xs uppercase text-gray-400 mb-1">
+          Password
+        </label>
+        <input
+          type="password"
+          placeholder="••••••••"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          className="auth-input"
+        />
+      </div>
+    </div>
+
+    {/* Add a lil gap from the password */}
+    <button type="submit" className="submit-btn mt-5">
+      {isLogin ? "Login" : "Register"}
+    </button>
+
+    {message && (
+      <p
+        className={`mt-3 text-center text-sm ${
+          message.startsWith("✅") || message.startsWith("🎉")
+            ? "text-green-400"
+            : "text-red-400"
+        }`}
+      >
+        {message}
+      </p>
+    )}
+  </form>
+);
 }
