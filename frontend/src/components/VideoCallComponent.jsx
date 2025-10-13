@@ -184,6 +184,18 @@ export default function VideoCallComponent({
   );
   const participantCount = participants.length;
 
+  // Dynamic grid layout based on participant count
+  const getGridLayout = (count) => {
+    if (count <= 1) return { cols: 1, rows: 1 };
+    if (count <= 2) return { cols: 2, rows: 1 };
+    if (count <= 4) return { cols: 2, rows: 2 };
+    if (count <= 6) return { cols: 3, rows: 2 };
+    if (count <= 9) return { cols: 3, rows: 3 };
+    return { cols: 4, rows: Math.ceil(count / 4) };
+  };
+
+  const gridLayout = getGridLayout(participantCount);
+
   return (
     <Box
       sx={{
@@ -200,50 +212,84 @@ export default function VideoCallComponent({
         sx={{
           flexGrow: 1,
           display: "grid",
-          gridTemplateColumns: `repeat(auto-fit, minmax(${Math.max(
-            200 - participantCount * 5,
-            100
-          )}px, 1fr))`,
+          gridTemplateColumns: `repeat(${gridLayout.cols}, 1fr)`,
+          gridTemplateRows: `repeat(${gridLayout.rows}, 1fr)`,
           gap: 2,
           p: 2,
           overflow: "hidden",
           placeItems: "center",
+          maxHeight: "calc(100vh - 100px)",
         }}
       >
         {stream && (
-          <video
-            ref={localVideoRef}
-            autoPlay
-            muted
-            playsInline
-            style={{
-              width: "100%",
-              height: "100%",
-              borderRadius: 10,
-              backgroundColor: "#000",
-              objectFit: "cover",
-              border: "2px solid #4CAF50",
-            }}
-          />
+          <Box sx={{ width: "100%", height: "100%", position: "relative" }}>
+            <video
+              ref={localVideoRef}
+              autoPlay
+              muted
+              playsInline
+              style={{
+                width: "100%",
+                height: "100%",
+                borderRadius: 10,
+                backgroundColor: "#000",
+                objectFit: "cover",
+                border: "2px solid #4CAF50",
+              }}
+            />
+            <Typography
+              variant="caption"
+              sx={{
+                position: "absolute",
+                bottom: 8,
+                left: 8,
+                bgcolor: "rgba(0,0,0,0.7)",
+                color: "white",
+                px: 1,
+                py: 0.5,
+                borderRadius: 1,
+                fontSize: "0.75rem",
+              }}
+            >
+              You ({participantCount})
+            </Typography>
+          </Box>
         )}
         {remoteStreams.map(({ socketId, stream }) => (
-          <video
-            key={socketId}
-            autoPlay
-            playsInline
-            style={{
-              width: "100%",
-              height: "100%",
-              borderRadius: 10,
-              backgroundColor: "#000",
-              objectFit: "cover",
-              border: "2px solid #2196F3",
-            }}
-            ref={(el) => {
-              if (el && stream && el.srcObject !== stream)
-                el.srcObject = stream;
-            }}
-          />
+          <Box key={socketId} sx={{ width: "100%", height: "100%", position: "relative" }}>
+            <video
+              autoPlay
+              playsInline
+              style={{
+                width: "100%",
+                height: "100%",
+                borderRadius: 10,
+                backgroundColor: "#000",
+                objectFit: "cover",
+                border: "2px solid #2196F3",
+              }}
+              ref={(el) => {
+                if (el && stream && el.srcObject !== stream)
+                  el.srcObject = stream;
+              }}
+            />
+            <Typography
+              variant="caption"
+              sx={{
+                position: "absolute",
+                bottom: 8,
+                left: 8,
+                bgcolor: "rgba(0,0,0,0.7)",
+                color: "white",
+                px: 1,
+                py: 0.5,
+                borderRadius: 1,
+                fontSize: "0.75rem",
+              }}
+            >
+              User {socketId.slice(-4)}
+            </Typography>
+          </Box>
         ))}
       </Box>
 
