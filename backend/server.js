@@ -55,6 +55,14 @@ io.on("connection", (socket) => {
         return;
       }
 
+      // Check room capacity (max 20 participants)
+      const currentMembers = videoCallRooms[roomId] || new Set();
+      if (currentMembers.size >= 20) {
+        console.log(`❌ Room ${roomId} is full (max 20 participants)`);
+        socket.emit("room-full", { roomId });
+        return;
+      }
+
       // Leave previous rooms
       for (const [room, members] of Object.entries(videoCallRooms)) {
         if (members.has(socket.id)) {

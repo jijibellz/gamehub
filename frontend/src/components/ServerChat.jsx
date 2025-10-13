@@ -27,21 +27,11 @@ export default function ServerChat({ serverName, channelName = "general", curren
   const [gifAnchor, setGifAnchor] = useState(null);
   const [gifSearch, setGifSearch] = useState("");
   const [gifs, setGifs] = useState([]);
-  const [loadingGifs, setLoadingGifs] = useState(false);
-  const [inVideoCall, setInVideoCall] = useState(false);
   const messagesEndRef = useRef(null);
 
-  // 🎤 Voice states
-  const [isRecording, setIsRecording] = useState(false);
-  const [recorder, setRecorder] = useState(null);
-  const [audioMessages, setAudioMessages] = useState([]);
-  const [audioChunks, setAudioChunks] = useState([]);
-  const [audioURL, setAudioURL] = useState(null);
-  const [recordError, setRecordError] = useState("");
-
-  // WebSocket ref and connection state
   const socketRef = useRef(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [isVideoRoomFull, setIsVideoRoomFull] = useState(false);
 
   // Auto-scroll
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -218,110 +208,6 @@ export default function ServerChat({ serverName, channelName = "general", curren
     }
   }, [gifAnchor]);
 
-  // 🎙️ Start recording (RecordRTC-style)
-  const startRecording = async () => {
-    try {
-      setRecordError("");
-      // 🚨 Clear previous recording data
-      if (audioChunks.length) setAudioChunks([]);
-      if (audioURL) {
-        URL.revokeObjectURL(audioURL);
-        setAudioURL(null);
-      }
-  
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      const chunks = [];
-
-      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
-      mediaRecorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: "audio/webm" });
-        const url = URL.createObjectURL(blob);
-        setAudioURL(url);
-        setAudioChunks(chunks);
-        // stop mic tracks
-        try {
-          mediaRecorder.stream.getTracks().forEach((t) => t.stop());
-        } catch {}
-      };
-
-      mediaRecorder.start();
-      setRecorder(mediaRecorder);
-      setIsRecording(true);
-    } catch (err) {
-      console.error("🎤 Failed to start recording:", err);
-      setRecordError("Microphone permission denied or unavailable.");
-    }
-  };
-
-  const stopRecording = () => {
-    if (recorder) {
-      recorder.stop();
-      setIsRecording(false);
-    }
-  };
-
-  const discardRecording = () => {
-    try {
-      if (audioURL) URL.revokeObjectURL(audioURL);
-    } catch {}
-    setAudioURL(null);
-    setAudioChunks([]);
-  };
-
-  // ✅ Upload voice message
-  const sendVoiceMessage = async () => {
-    if (!audioChunks.length || !currentUser?.username) return;
-
-    const blob = new Blob(audioChunks, { type: "audio/webm" });
-    const formData = new FormData();
-    // Backend expects field name `audio` (see FastAPI UploadFile param)
-    formData.append("audio", blob, "voiceMessage.webm");
-    formData.append("sender_username", currentUser.username);
-
-    try {
-      const res = await axios.post(
-        ROUTES.SERVER_VOICE_UPLOAD(serverName, channelName),
-        formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
-      );
-
-      console.log("✅ Voice message uploaded:", res.data);
-
-      const newMessage = {
-        id: Date.now().toString(),
-        user: currentUser.username,
-        profile_picture: currentUser.profile_picture,
-        type: "voice",
-        content: res.data.file_url,
-        timestamp: new Date().toISOString(),
-      };
-
-      // Broadcast via WebSocket (only if connected)
-      if (socketRef.current && socketRef.current.connected) {
-        socketRef.current.emit("new-message", {
-          serverName,
-          channelName,
-          message: newMessage,
-        });
-      } else {
-        console.warn('⚠️ Socket not connected, voice message may not be broadcast in real-time');
-      }
-
-      // reset
-      try { if (audioURL) URL.revokeObjectURL(audioURL); } catch {}
-      setAudioURL(null);
-      setAudioChunks([]);
-    } catch (err) {
-      console.error("❌ Error uploading voice message:", err.response?.data || err);
-      if (err.response?.status === 403) {
-        alert("You must join this server to send voice messages!");
-      } else {
-        alert(`Failed to upload voice message: ${err.response?.data?.detail || err.message}`);
-      }
-    }
-  };
-
   return (
     <Box display="flex" flexDirection="column" bgcolor="#36393f" height="100%">
       {/* Connection Status Indicator */}
@@ -352,13 +238,15 @@ export default function ServerChat({ serverName, channelName = "general", curren
           value={activeChannelType}
           onChange={(e, newValue) => {
             setActiveChannelType(newValue);
-            setInVideoCall(false);
+            if (newValue !== "video") {
+              setInVideoCall(false);
+              setIsVideoRoomFull(false);
+            }
           }}
           textColor="primary"
           indicatorColor="primary"
         >
           <Tab label="Text" value="text" />
-          <Tab label="Voice" value="voice" />
           <Tab label="Video" value="video" />
         </Tabs>
       </Box>
@@ -470,170 +358,40 @@ export default function ServerChat({ serverName, channelName = "general", curren
           </>
         )}
 
-        {/* 🎙️ VOICE CHAT */}
-        {activeChannelType === "voice" && (
-          <>
-            {/* Scrollable Voice Messages Area */}
-            <Box 
-              flex={1} 
-              overflow="auto" 
-              px={2}
-              py={2}
-              sx={{
-                "&::-webkit-scrollbar": { width: "8px" },
-                "&::-webkit-scrollbar-thumb": { 
-                  backgroundColor: "#202225", 
-                  borderRadius: "4px" 
-                },
-              }}
-            >
-              {messages
-                .filter((msg) => msg.type === "voice")
-                .map((msg) => (
-                  <Box key={msg.id || msg.timestamp} mb={3} display="flex" gap={1.5}>
-                    <Avatar 
-                      sx={{ width: 40, height: 40, bgcolor: "#5865f2" }}
-                      src={getProfilePictureUrl(msg.profile_picture)}
-                    >
-                      {msg.user?.[0]?.toUpperCase()}
-                    </Avatar>
-                    <Box flex={1}>
-                      <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                        <Typography variant="body2" color="white" fontWeight="bold">
-                          {msg.user}
-                        </Typography>
-                        <Typography variant="caption" color="#888">
-                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </Typography>
-                      </Box>
-                      {msg.content && (
-                        <audio 
-                          controls 
-                          src={msg.content} 
-                          style={{ 
-                            width: "100%", 
-                            maxWidth: "400px",
-                            height: "40px"
-                          }} 
-                        />
-                      )}
-                    </Box>
-                  </Box>
-                ))}
-              {messages.filter((msg) => msg.type === "voice").length === 0 && (
-                <Box display="flex" justifyContent="center" alignItems="center" height="100%">
-                  <Typography color="#888">No voice messages yet.</Typography>
-                </Box>
-              )}
-            </Box>
-
-            {/* Fixed Recording Controls at Bottom */}
-            <Box
-  display="flex"
-  flexDirection="column"
-  alignItems="center"
-  gap={1}
-  px={2}
-  py={2}
-  sx={{
-    borderTop: "1px solid #e0e0e0",
-    bgcolor: "#ffffff",
-    flexShrink: 0,
-  }}
->
-  {recordError && (
-    <Typography color="#ff8b8b" variant="caption">
-      {recordError}
-    </Typography>
-  )}
-
-  <Button
-    variant="contained"
-    sx={{
-      borderRadius: "50%",
-      width: 80,
-      height: 80,
-      fontSize: 30,
-      backgroundColor: isRecording ? "#ff8b8b" : "#ffffff",
-      color: isRecording ? "#fff" : "#000",
-      border: "2px solid #000",
-      boxShadow: "0 0 10px rgba(0,0,0,0.15)",
-      "&:hover": {
-        backgroundColor: isRecording ? "#ff6b6b" : "#f5f5f5",
-      },
-    }}
-    onClick={isRecording ? stopRecording : startRecording}
-  >
-    {isRecording ? "⏹️" : "🎤"}
-  </Button>
-
-  {audioURL && (
-    <Box
-      display="flex"
-      flexDirection="column"
-      alignItems="center"
-      gap={1}
-      width="100%"
-      maxWidth="400px"
-    >
-      <audio controls src={audioURL} style={{ width: "100%" }} />
-      <Box display="flex" gap={1}>
-        <Button
-          variant="outlined"
-          sx={{
-            borderColor: "#000",
-            color: "#000",
-            "&:hover": {
-              borderColor: "#555",
-              color: "#555",
-            },
-          }}
-          onClick={discardRecording}
-        >
-          Discard
-        </Button>
-        <Button
-          variant="contained"
-          sx={{
-            backgroundColor: "#000",
-            color: "#fff",
-            "&:hover": {
-              backgroundColor: "#333",
-            },
-          }}
-          onClick={sendVoiceMessage}
-        >
-          Send
-        </Button>
-      </Box>
-    </Box>
-  )}
-</Box>
-
-          </>
-        )}
-
         {/* 🎥 VIDEO CHAT */}
         {activeChannelType === "video" && (
           !inVideoCall ? (
             <Box flex={1} display="flex" justifyContent="center" alignItems="center">
-              <Button
-  variant="contained"
-  onClick={() => setInVideoCall(true)}
-  sx={{
-    fontSize: 18,
-    px: 4,
-    py: 2,
-    backgroundColor: "white",
-    color: "black",
-    "&:hover": {
-      backgroundColor: "#f0f0f0",
-    },
-  }}
->
-  Join Video Call
-</Button>
-
+              {isVideoRoomFull ? (
+                <Box textAlign="center">
+                  <Typography variant="h6" color="#ff6b6b" gutterBottom>
+                    Video Call Room is Full
+                  </Typography>
+                  <Typography variant="body2" color="#888">
+                    Maximum 20 participants allowed. Please try again later.
+                  </Typography>
+                </Box>
+              ) : (
+                <Button
+                  variant="contained"
+                  onClick={() => {
+                    setInVideoCall(true);
+                    setIsVideoRoomFull(false); // Reset when attempting to join
+                  }}
+                  sx={{
+                    fontSize: 18,
+                    px: 4,
+                    py: 2,
+                    backgroundColor: "white",
+                    color: "black",
+                    "&:hover": {
+                      backgroundColor: "#f0f0f0",
+                    },
+                  }}
+                >
+                  Join Video Call
+                </Button>
+              )}
             </Box>
           ) : (
             <Box flex={1} width="100%">
@@ -641,7 +399,11 @@ export default function ServerChat({ serverName, channelName = "general", curren
                 serverName={serverName}
                 channelName={channelName}
                 currentUser={currentUser}
-                onLeaveCall={() => setInVideoCall(false)}
+                onLeaveCall={() => {
+                  setInVideoCall(false);
+                  setIsVideoRoomFull(false);
+                }}
+                onRoomFull={() => setIsVideoRoomFull(true)}
               />
             </Box>
           )

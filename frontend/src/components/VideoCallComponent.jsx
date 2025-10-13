@@ -1,20 +1,32 @@
 // VideoCallComponent.jsx
 import { useEffect, useRef, useState } from "react";
-import { Box, Button, Typography } from "@mui/material";
+import { Box, Typography, Fab } from "@mui/material";
+import CallEndIcon from "@mui/icons-material/CallEnd";
 import { io } from "socket.io-client";
 import { SOCKET_SERVER_URL } from "../api/routes";
 
-export default function VideoCallComponent({ serverName, channelName, currentUser, onLeaveCall }) {
+export default function VideoCallComponent({ serverName, channelName, currentUser, onLeaveCall, onRoomFull }) {
   const localVideoRef = useRef(null);
 
   // visible state
   const [remoteStreams, setRemoteStreams] = useState([]); // [{ socketId, stream }]
   const [stream, setStream] = useState(null);
+  const [isRoomFull, setIsRoomFull] = useState(false);
 
   // refs for mutable values used in callbacks
   const socketRef = useRef(null);
   const peerConnectionsRef = useRef({}); // { socketId: RTCPeerConnection }
   const remoteStreamsRef = useRef([]); // mirror of remoteStreams to avoid closure issues
+
+  // Constants
+  const MAX_PARTICIPANTS = 20;
+  const getVideoSize = (participantCount) => {
+    // Dynamic sizing based on participant count
+    if (participantCount <= 4) return { width: 300, height: 300 };
+    if (participantCount <= 9) return { width: 250, height: 250 };
+    if (participantCount <= 16) return { width: 200, height: 200 };
+    return { width: 150, height: 150 }; // For 17-20 participants
+  };
 
   // helper to update both ref + state
   const addOrUpdateRemoteStream = (socketId, remoteStream) => {
@@ -28,6 +40,11 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
       const updated = [...remoteStreamsRef.current, { socketId, stream: remoteStream }];
       remoteStreamsRef.current = updated;
       setRemoteStreams(updated);
+
+      // Check if room is now full
+      if (updated.length >= MAX_PARTICIPANTS) {
+        setIsRoomFull(true);
+      }
     }
   };
 
@@ -35,6 +52,11 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
     const updated = remoteStreamsRef.current.filter(s => s.socketId !== socketId);
     remoteStreamsRef.current = updated;
     setRemoteStreams(updated);
+
+    // Check if room is no longer full
+    if (updated.length < MAX_PARTICIPANTS) {
+      setIsRoomFull(false);
+    }
   };
 
   useEffect(() => {
@@ -156,7 +178,6 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
           }
           try {
             await pc.addIceCandidate(candidate);
-            // console.log("Added ICE candidate from", from);
           } catch (err) {
             console.error("Error adding ICE candidate:", err);
           }
@@ -175,10 +196,13 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
           removeRemoteStream(socketId);
         });
 
-        // debug / server logs
-        socketRef.current.on("connect", () => console.log("Socket connected:", socketRef.current.id));
-        socketRef.current.on("disconnect", (reason) => console.log("Socket disconnected:", reason));
-        socketRef.current.on("connect_error", (err) => console.error("Socket connect_error:", err));
+        // Handle room full event
+        socketRef.current.on("room-full", ({ roomId }) => {
+          console.log("❌ Room is full:", roomId);
+          setIsRoomFull(true);
+          if (onRoomFull) onRoomFull();
+          if (onLeaveCall) onLeaveCall();
+        });
       } catch (err) {
         console.error("Error in initCall:", err);
       }
@@ -191,7 +215,6 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
       // cleanup
       try {
         if (socketRef.current) {
-          // tell server we're leaving the video room (server handler is leave_room)
           socketRef.current.emit("leave_room", { roomId: channelName });
           socketRef.current.disconnect();
         }
@@ -206,8 +229,8 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
       peerConnectionsRef.current = {};
       remoteStreamsRef.current = [];
       setRemoteStreams([]);
+      setIsRoomFull(false); // Reset room full state on cleanup
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function createPeerConnection(remoteSocketId, localStream) {
@@ -215,7 +238,6 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
-        // optional TURNs...
         {
           urls: 'turn:openrelay.metered.ca:80',
           username: 'openrelayproject',
@@ -244,7 +266,6 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
     // send ICE candidates to the other peer
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        // server expects incoming candidate event name: "ice_candidate" (underscore)
         socketRef.current.emit("ice_candidate", {
           to: remoteSocketId,
           candidate: event.candidate,
@@ -268,37 +289,74 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
   }
 
   const handleLeaveCall = () => {
-    // tell server we're leaving
     try {
       if (socketRef.current) socketRef.current.emit("leave_room", { roomId: channelName });
       if (socketRef.current) socketRef.current.disconnect();
     } catch (e) {}
-    // stop local stream
     if (stream) stream.getTracks().forEach(t => t.stop());
-    // close all peer connections
     Object.values(peerConnectionsRef.current).forEach(pc => {
       try { pc.close(); } catch (e) {}
     });
     peerConnectionsRef.current = {};
     remoteStreamsRef.current = [];
     setRemoteStreams([]);
+    setIsRoomFull(false); // Reset room full state
     if (onLeaveCall) onLeaveCall();
   };
 
+  const currentParticipantCount = remoteStreams.length + 1;
+  const videoSize = getVideoSize(currentParticipantCount);
+
   return (
-    <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height="100%" gap={2}>
-      <Box textAlign="center" mb={2}>
+    <Box sx={{ position: "relative", height: "100%", display: "flex", flexDirection: "column" }}>
+      {/* Fixed Leave Call Button */}
+      <Fab
+        color="error"
+        aria-label="leave call"
+        onClick={handleLeaveCall}
+        sx={{
+          position: "fixed",
+          top: 20,
+          right: 20,
+          zIndex: 1000,
+          boxShadow: "0 4px 20px rgba(244, 67, 54, 0.3)",
+        }}
+      >
+        <CallEndIcon />
+      </Fab>
+
+      {/* Header */}
+      <Box textAlign="center" mb={2} px={2}>
         <Typography variant="h6" color="white">
-          Video Call - {remoteStreams.length + 1} participant{remoteStreams.length !== 0 ? 's' : ''}
+          Video Call - {currentParticipantCount} participant{currentParticipantCount !== 1 ? 's' : ''}
         </Typography>
         {remoteStreams.length === 0 && (
           <Typography variant="body2" color="#888" mt={1}>
             Waiting for others to join...
           </Typography>
         )}
+        {isRoomFull && (
+          <Typography variant="body2" color="#ff6b6b" mt={1}>
+            Room is full (max {MAX_PARTICIPANTS} participants)
+          </Typography>
+        )}
       </Box>
 
-      <Box display="flex" gap={2} justifyContent="center" flexWrap="wrap">
+      {/* Video Grid */}
+      <Box
+        sx={{
+          flex: 1,
+          display: "grid",
+          gridTemplateColumns: `repeat(auto-fit, ${videoSize.width}px)`,
+          gap: 2,
+          justifyContent: "center",
+          alignContent: "center",
+          p: 2,
+          maxHeight: "calc(100vh - 200px)",
+          overflow: "auto",
+        }}
+      >
+        {/* Local Video */}
         <Box position="relative">
           <video
             ref={localVideoRef}
@@ -306,8 +364,8 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
             muted
             playsInline
             style={{
-              width: 300,
-              height: 300,
+              width: videoSize.width,
+              height: videoSize.height,
               borderRadius: 8,
               backgroundColor: "#000",
               objectFit: "cover",
@@ -331,14 +389,15 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
           </Typography>
         </Box>
 
+        {/* Remote Videos */}
         {remoteStreams.map(({ socketId, stream }) => (
           <Box key={socketId} position="relative">
             <video
               autoPlay
               playsInline
               style={{
-                width: 300,
-                height: 300,
+                width: videoSize.width,
+                height: videoSize.height,
                 borderRadius: 8,
                 backgroundColor: "#000",
                 objectFit: "cover",
@@ -373,9 +432,6 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
           </Box>
         ))}
       </Box>
-      <Button variant="contained" color="error" onClick={handleLeaveCall}>
-        Leave Call
-      </Button>
     </Box>
   );
 }

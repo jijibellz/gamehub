@@ -35,6 +35,13 @@ async def join_room(sid, data):
             print(f"❌ Invalid join_room data from {sid}: {data}")
             return
 
+        # Check room capacity (max 20 participants)
+        current_members = video_call_rooms.get(room_id, set())
+        if len(current_members) >= 20:
+            print(f"❌ Room {room_id} is full (max 20 participants)")
+            await sio.emit("room-full", { "roomId": room_id }, to=sid)
+            return
+
         # Leave previous rooms (if any)
         for room, members in list(video_call_rooms.items()):
             if sid in members:
