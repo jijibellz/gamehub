@@ -21,7 +21,8 @@ export default function ChatComponent({ currentUser }) {
   const [emojiAnchor, setEmojiAnchor] = useState(null);
   const [gifAnchor, setGifAnchor] = useState(null);
   const [gifSearch, setGifSearch] = useState("");
-  const [gifResults, setGifResults] = useState([]);
+  const [gifs, setGifs] = useState([]);
+  const [loadingGifs, setLoadingGifs] = useState(false);
   const messagesEndRef = useRef(null);
 
   // Fetch users, friends, and pending requests
@@ -95,20 +96,7 @@ export default function ChatComponent({ currentUser }) {
     setInput((prev) => prev + emojiData.emoji);
   };
 
-  // GIF search using Tenor API
-  const handleGifSearch = async () => {
-    if (!gifSearch.trim()) return;
-    try {
-      const res = await axios.get(
-        `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(gifSearch)}&key=AIzaSyAyimkuYQYF_FXVALexPuGQctUWRURdCYQ&limit=20`
-      );
-      setGifResults(res.data.results || []);
-    } catch (err) {
-      console.error("GIF search failed:", err);
-    }
-  };
-
- // 🎬 GIF Search
+  // 🎬 GIF Search (same as server chat)
   const searchGifs = async (query) => {
     if (!query.trim()) {
       // Load trending GIFs if no search
@@ -128,6 +116,18 @@ export default function ChatComponent({ currentUser }) {
       setLoadingGifs(false);
     }
   };
+
+  const handleGifClick = (gifUrl) => {
+    setInput((prev) => prev + ` ${gifUrl} `);
+    setGifAnchor(null);
+  };
+
+  // Load trending GIFs when GIF picker opens
+  useEffect(() => {
+    if (gifAnchor) {
+      searchGifs("trending");
+    }
+  }, [gifAnchor]);
 
   // Load messages for a friend
   const loadMessagesForFriend = async (friend) => {
@@ -435,7 +435,7 @@ export default function ChatComponent({ currentUser }) {
                   <Box key={msg.id} mb={2} display="flex" gap={1.5}>
                     <Avatar 
                       sx={{ width: 40, height: 40, bgcolor: "#5865f2" }}
-                      src={senderProfilePic ? `${API_BASE_URL}${senderProfilePic}` : ""}
+                      src={getProfilePictureUrl(senderProfilePic)}
                     >
                       {msg.sender[0].toUpperCase()}
                     </Avatar>
@@ -501,32 +501,75 @@ export default function ChatComponent({ currentUser }) {
             </Popover>
 
             {/* GIF Picker Popover */}
-            <Popover open={Boolean(gifAnchor)} anchorEl={gifAnchor} onClose={() => setGifAnchor(null)} anchorOrigin={{ vertical: "top", horizontal: "left" }}>
-              <Box p={2} width={300}>
-                <TextField 
-                  fullWidth 
-                  size="small" 
-                  placeholder="Search GIFs..." 
-                  value={gifSearch} 
-                  onChange={(e) => setGifSearch(e.target.value)} 
-                  onKeyDown={(e) => e.key === "Enter" && handleGifSearch()} 
-                  sx={{ mb: 1 }} 
+            <Popover
+              open={Boolean(gifAnchor)}
+              anchorEl={gifAnchor}
+              onClose={() => setGifAnchor(null)}
+              anchorOrigin={{ vertical: "top", horizontal: "left" }}
+              transformOrigin={{ vertical: "bottom", horizontal: "left" }}
+            >
+              <Box sx={{ width: 400, maxHeight: 500, p: 2, bgcolor: "#2b2d31" }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="Search GIFs..."
+                  value={gifSearch}
+                  onChange={(e) => setGifSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && searchGifs(gifSearch)}
+                  sx={{
+                    mb: 2,
+                    bgcolor: "#1e1f22",
+                    input: { color: "white" },
+                    "& .MuiOutlinedInput-root": {
+                      "& fieldset": { borderColor: "#444" },
+                      "&:hover fieldset": { borderColor: "#666" },
+                    }
+                  }}
                 />
-                <Box maxHeight={300} overflow="auto">
-                  {gifResults.map((gif) => (
-                    <Box 
-                      key={gif.id} 
-                      onClick={() => handleGifSelect(gif.media_formats?.gif?.url || gif.url)} 
-                      sx={{ cursor: "pointer", mb: 1 }}
-                    >
-                      <img 
-                        src={gif.media_formats?.tinygif?.url || gif.media_formats?.gif?.url} 
-                        alt={gif.content_description} 
-                        style={{ width: "100%", borderRadius: "4px" }} 
-                      />
-                    </Box>
-                  ))}
-                </Box>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  onClick={() => searchGifs(gifSearch)}
+                  sx={{ mb: 2 }}
+                >
+                  Search
+                </Button>
+                {loadingGifs ? (
+                  <Box display="flex" justifyContent="center" p={2}>
+                    <Typography color="white">Loading GIFs...</Typography>
+                  </Box>
+                ) : (
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(2, 1fr)",
+                      gap: 1,
+                      maxHeight: 350,
+                      overflow: "auto",
+                      "&::-webkit-scrollbar": { width: "8px" },
+                      "&::-webkit-scrollbar-thumb": { backgroundColor: "#444", borderRadius: "4px" },
+                    }}
+                  >
+                    {gifs.map((gif) => (
+                      <Box
+                        key={gif.id}
+                        onClick={() => handleGifClick(gif.media_formats.gif.url)}
+                        sx={{
+                          cursor: "pointer",
+                          borderRadius: 1,
+                          overflow: "hidden",
+                          "&:hover": { opacity: 0.8 },
+                        }}
+                      >
+                        <img
+                          src={gif.media_formats.tinygif.url}
+                          alt={gif.content_description}
+                          style={{ width: "100%", display: "block" }}
+                        />
+                      </Box>
+                    ))}
+                  </Box>
+                )}
               </Box>
             </Popover>
           </>
