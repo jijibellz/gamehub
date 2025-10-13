@@ -112,7 +112,7 @@ export default function ServerChat({ serverName, channelName = "general", curren
         content: input,
         type: "text",
       });
-      
+
       const newMessage = {
         id: Date.now().toString(),
         user: currentUser.username,
@@ -121,6 +121,9 @@ export default function ServerChat({ serverName, channelName = "general", curren
         content: input,
         timestamp: new Date().toISOString(),
       };
+
+      // Add message to local state immediately so user sees it right away
+      setMessages((prev) => [...prev, newMessage]);
 
       // Broadcast via WebSocket
       if (socketRef.current) {
