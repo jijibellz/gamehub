@@ -1,62 +1,46 @@
 // VideoCallComponent.jsx
 import { useEffect, useRef, useState } from "react";
-import { Box, Typography, Fab } from "@mui/material";
+import { Box, Typography, Fab, Grid } from "@mui/material";
 import CallEndIcon from "@mui/icons-material/CallEnd";
 import { io } from "socket.io-client";
 import { SOCKET_SERVER_URL } from "../api/routes";
 
 export default function VideoCallComponent({ serverName, channelName, currentUser, onLeaveCall, onRoomFull }) {
   const localVideoRef = useRef(null);
-
-  // visible state
-  const [remoteStreams, setRemoteStreams] = useState([]); // [{ socketId, stream }]
+  const [remoteStreams, setRemoteStreams] = useState([]);
   const [stream, setStream] = useState(null);
   const [isRoomFull, setIsRoomFull] = useState(false);
 
-  // refs for mutable values used in callbacks
   const socketRef = useRef(null);
-  const peerConnectionsRef = useRef({}); // { socketId: RTCPeerConnection }
-  const remoteStreamsRef = useRef([]); // mirror of remoteStreams to avoid closure issues
+  const peerConnectionsRef = useRef({});
+  const remoteStreamsRef = useRef([]);
 
-  // Constants
   const MAX_PARTICIPANTS = 20;
-  const getVideoSize = (participantCount) => {
-    // Dynamic sizing based on participant count
-    if (participantCount <= 4) return { width: 300, height: 300 };
-    if (participantCount <= 9) return { width: 250, height: 250 };
-    if (participantCount <= 16) return { width: 200, height: 200 };
-    return { width: 150, height: 150 }; // For 17-20 participants
+
+  const getGridCols = (count) => {
+    if (count <= 1) return 1;
+    if (count <= 2) return 2;
+    if (count <= 4) return 2;
+    if (count <= 6) return 3;
+    if (count <= 9) return 3;
+    if (count <= 12) return 4;
+    if (count <= 16) return 4;
+    return 5;
   };
 
-  // helper to update both ref + state
   const addOrUpdateRemoteStream = (socketId, remoteStream) => {
     const idx = remoteStreamsRef.current.findIndex(s => s.socketId === socketId);
-    if (idx >= 0) {
-      const updated = [...remoteStreamsRef.current];
-      updated[idx] = { socketId, stream: remoteStream };
-      remoteStreamsRef.current = updated;
-      setRemoteStreams(updated);
-    } else {
-      const updated = [...remoteStreamsRef.current, { socketId, stream: remoteStream }];
-      remoteStreamsRef.current = updated;
-      setRemoteStreams(updated);
-
-      // Check if room is now full
-      if (updated.length >= MAX_PARTICIPANTS) {
-        setIsRoomFull(true);
-      }
-    }
+    const updated = [...remoteStreamsRef.current];
+    if (idx >= 0) updated[idx] = { socketId, stream: remoteStream };
+    else updated.push({ socketId, stream: remoteStream });
+    remoteStreamsRef.current = updated;
+    setRemoteStreams(updated);
   };
 
   const removeRemoteStream = (socketId) => {
     const updated = remoteStreamsRef.current.filter(s => s.socketId !== socketId);
     remoteStreamsRef.current = updated;
     setRemoteStreams(updated);
-
-    // Check if room is no longer full
-    if (updated.length < MAX_PARTICIPANTS) {
-      setIsRoomFull(false);
-    }
   };
 
   useEffect(() => {
@@ -70,138 +54,65 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
           return;
         }
 
-        // get local media
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         if (!mounted) return;
         setStream(localStream);
         if (localVideoRef.current) localVideoRef.current.srcObject = localStream;
 
-        // connect to signaling server
-        socketRef.current = io(SOCKET_SERVER_URL, {
-          transports: ["websocket"],
-        });
+        socketRef.current = io(SOCKET_SERVER_URL, { transports: ["websocket"] });
+        socketRef.current.emit("join_room", { roomId: channelName, userId: currentUser.username });
 
-        // Emit join_room (server expects join_room)
-        socketRef.current.emit("join_room", {
-          roomId: channelName,
-          userId: currentUser.username,
-        });
-
-        // When a new user joins the room (other clients receive this)
         socketRef.current.on("user-joined", ({ userId, socketId }) => {
-          console.log("🆕 New user joined:", userId, socketId);
-
-          // don't connect to self
           if (socketId === socketRef.current.id) return;
+          if (peerConnectionsRef.current[socketId]) return;
 
-          // if already have pc skip
-          if (peerConnectionsRef.current[socketId]) {
-            console.log("Already have PC for", socketId);
-            return;
-          }
-
-          // create pc as existing participant (we will be the caller to the newcomer)
           const pc = createPeerConnection(socketId, localStream);
-
           peerConnectionsRef.current = { ...peerConnectionsRef.current, [socketId]: pc };
 
-          // create offer and send to the newcomer
           (async () => {
             try {
               const offer = await pc.createOffer();
               await pc.setLocalDescription(offer);
-              socketRef.current.emit("offer", {
-                to: socketId,
-                offer,
-                from: socketRef.current.id,
-              });
-              console.log("📤 Offer sent to", socketId);
+              socketRef.current.emit("offer", { to: socketId, offer, from: socketRef.current.id });
             } catch (err) {
               console.error("Error creating/sending offer:", err);
             }
           })();
         });
 
-        // Handle incoming offer (we are callee)
         socketRef.current.on("offer", async ({ from, offer }) => {
-          console.log("📥 Received offer from", from);
-
-          // If pc already exists, ignore duplicate (or optionally replace)
-          if (peerConnectionsRef.current[from]) {
-            console.log("Duplicate offer: PC already exists for", from);
-            return;
-          }
-
+          if (peerConnectionsRef.current[from]) return;
           const pc = createPeerConnection(from, localStream);
           peerConnectionsRef.current = { ...peerConnectionsRef.current, [from]: pc };
-
-          try {
-            await pc.setRemoteDescription(offer);
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-
-            // send answer back (server expects 'answer' event)
-            socketRef.current.emit("answer", {
-              to: from,
-              answer,
-              from: socketRef.current.id,
-            });
-            console.log("📤 Answer sent to", from);
-          } catch (err) {
-            console.error("Error handling offer from", from, err);
-          }
+          await pc.setRemoteDescription(offer);
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          socketRef.current.emit("answer", { to: from, answer, from: socketRef.current.id });
         });
 
-        // Handle incoming answer (caller receives this)
         socketRef.current.on("answer", async ({ from, answer }) => {
-          console.log("📥 Received answer from", from);
           const pc = peerConnectionsRef.current[from];
-          if (!pc) {
-            console.warn("No PC found for answer from", from);
-            return;
-          }
-          try {
-            await pc.setRemoteDescription(answer);
-          } catch (err) {
-            console.error("Error setting remote description for answer:", err);
-          }
+          if (!pc) return;
+          await pc.setRemoteDescription(answer);
         });
 
-        // Server forwards ICE as event name "ice-candidate" (hyphen) — we listen for that
         socketRef.current.on("ice-candidate", async ({ from, candidate }) => {
-          // sanity
           if (!candidate || !from) return;
           const pc = peerConnectionsRef.current[from];
-          if (!pc) {
-            console.warn("No PC when receiving candidate from", from);
-            return;
-          }
-          try {
-            await pc.addIceCandidate(candidate);
-          } catch (err) {
-            console.error("Error adding ICE candidate:", err);
-          }
+          if (pc) await pc.addIceCandidate(candidate);
         });
 
-        // When someone leaves
         socketRef.current.on("user-left", ({ socketId }) => {
-          console.log("User left:", socketId);
           const pc = peerConnectionsRef.current[socketId];
-          if (pc) {
-            try { pc.close(); } catch (e) {}
-            const copy = { ...peerConnectionsRef.current };
-            delete copy[socketId];
-            peerConnectionsRef.current = copy;
-          }
+          if (pc) pc.close();
+          delete peerConnectionsRef.current[socketId];
           removeRemoteStream(socketId);
         });
 
-        // Handle room full event
-        socketRef.current.on("room-full", ({ roomId }) => {
-          console.log("❌ Room is full:", roomId);
+        socketRef.current.on("room-full", () => {
           setIsRoomFull(true);
-          if (onRoomFull) onRoomFull();
-          if (onLeaveCall) onLeaveCall();
+          onRoomFull?.();
+          onLeaveCall?.();
         });
       } catch (err) {
         console.error("Error in initCall:", err);
@@ -212,58 +123,35 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
 
     return () => {
       mounted = false;
-      // cleanup
       try {
-        if (socketRef.current) {
-          socketRef.current.emit("leave_room", { roomId: channelName });
-          socketRef.current.disconnect();
-        }
+        socketRef.current?.emit("leave_room", { roomId: channelName });
+        socketRef.current?.disconnect();
       } catch (e) {}
-      if (localStream) {
-        localStream.getTracks().forEach(t => t.stop());
-      }
-      // close all peer connections
-      Object.values(peerConnectionsRef.current).forEach(pc => {
-        try { pc.close(); } catch (e) {}
-      });
+      localStream?.getTracks().forEach(t => t.stop());
+      Object.values(peerConnectionsRef.current).forEach(pc => pc.close());
       peerConnectionsRef.current = {};
       remoteStreamsRef.current = [];
       setRemoteStreams([]);
-      setIsRoomFull(false); // Reset room full state on cleanup
+      setIsRoomFull(false);
     };
   }, []);
 
   function createPeerConnection(remoteSocketId, localStream) {
     const pc = new RTCPeerConnection({
       iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        {
-          urls: 'turn:openrelay.metered.ca:80',
-          username: 'openrelayproject',
-          credential: 'openrelayproject',
-        },
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
       ],
-      iceCandidatePoolSize: 10,
     });
 
-    // add local tracks
-    if (localStream) {
-      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-    }
+    localStream?.getTracks().forEach(track => pc.addTrack(track, localStream));
 
-    // when remote track(s) received
     pc.ontrack = (event) => {
-      if (!event.streams || event.streams.length === 0) {
-        console.warn("No streams on ontrack for", remoteSocketId);
-        return;
-      }
       const remoteStream = event.streams[0];
       addOrUpdateRemoteStream(remoteSocketId, remoteStream);
-      console.log("Received remote stream for", remoteSocketId, "tracks:", remoteStream.getTracks().length);
     };
 
-    // send ICE candidates to the other peer
     pc.onicecandidate = (event) => {
       if (event.candidate) {
         socketRef.current.emit("ice_candidate", {
@@ -274,164 +162,124 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
       }
     };
 
-    pc.onconnectionstatechange = () => {
-      console.log(`Connection state (${remoteSocketId}):`, pc.connectionState);
-      if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
-        // optional: try restart or cleanup
-      }
-    };
-
-    pc.oniceconnectionstatechange = () => {
-      console.log(`ICE state (${remoteSocketId}):`, pc.iceConnectionState);
-    };
-
     return pc;
   }
 
   const handleLeaveCall = () => {
-    try {
-      if (socketRef.current) socketRef.current.emit("leave_room", { roomId: channelName });
-      if (socketRef.current) socketRef.current.disconnect();
-    } catch (e) {}
-    if (stream) stream.getTracks().forEach(t => t.stop());
-    Object.values(peerConnectionsRef.current).forEach(pc => {
-      try { pc.close(); } catch (e) {}
-    });
+    socketRef.current?.emit("leave_room", { roomId: channelName });
+    socketRef.current?.disconnect();
+    stream?.getTracks().forEach(t => t.stop());
+    Object.values(peerConnectionsRef.current).forEach(pc => pc.close());
     peerConnectionsRef.current = {};
     remoteStreamsRef.current = [];
     setRemoteStreams([]);
-    setIsRoomFull(false); // Reset room full state
-    if (onLeaveCall) onLeaveCall();
+    setIsRoomFull(false);
+    onLeaveCall?.();
   };
 
-  const currentParticipantCount = remoteStreams.length + 1;
-  const videoSize = getVideoSize(currentParticipantCount);
+  const totalParticipants = remoteStreams.length + 1;
+  const gridCols = getGridCols(totalParticipants);
 
   return (
-    <Box sx={{ position: "relative", height: "100%", display: "flex", flexDirection: "column" }}>
-      {/* Fixed Leave Call Button */}
+    <Box sx={{ height: "100%", display: "flex", flexDirection: "column", bgcolor: "#1E1E1E" }}>
       <Fab
         color="error"
         aria-label="leave call"
         onClick={handleLeaveCall}
-        sx={{
-          position: "fixed",
-          top: 20,
-          right: 20,
-          zIndex: 1000,
-          boxShadow: "0 4px 20px rgba(244, 67, 54, 0.3)",
-        }}
+        sx={{ position: "fixed", top: 20, right: 20, zIndex: 1000 }}
       >
         <CallEndIcon />
       </Fab>
 
-      {/* Header */}
-      <Box textAlign="center" mb={2} px={2}>
+      <Box textAlign="center" p={2}>
         <Typography variant="h6" color="white">
-          Video Call - {currentParticipantCount} participant{currentParticipantCount !== 1 ? 's' : ''}
+          Video Call - {totalParticipants} participant{totalParticipants > 1 ? "s" : ""}
         </Typography>
-        {remoteStreams.length === 0 && (
-          <Typography variant="body2" color="#888" mt={1}>
-            Waiting for others to join...
-          </Typography>
-        )}
-        {isRoomFull && (
-          <Typography variant="body2" color="#ff6b6b" mt={1}>
-            Room is full (max {MAX_PARTICIPANTS} participants)
-          </Typography>
-        )}
       </Box>
 
-      {/* Video Grid */}
-      <Box
+      <Grid
+        container
+        spacing={2}
+        justifyContent="center"
+        alignItems="center"
         sx={{
-          flex: 1,
-          display: "grid",
-          gridTemplateColumns: `repeat(auto-fit, ${videoSize.width}px)`,
-          gap: 2,
-          justifyContent: "center",
-          alignContent: "center",
+          flexGrow: 1,
+          overflowY: "auto",
           p: 2,
-          maxHeight: "calc(100vh - 200px)",
-          overflow: "auto",
+          justifyContent: "center",
         }}
       >
         {/* Local Video */}
-        <Box position="relative">
-          <video
-            ref={localVideoRef}
-            autoPlay
-            muted
-            playsInline
-            style={{
-              width: videoSize.width,
-              height: videoSize.height,
-              borderRadius: 8,
-              backgroundColor: "#000",
-              objectFit: "cover",
-              border: "2px solid #4CAF50",
-            }}
-          />
-          <Typography
-            variant="caption"
-            sx={{
-              position: "absolute",
-              bottom: 8,
-              left: 8,
-              bgcolor: "rgba(0,0,0,0.7)",
-              color: "white",
-              px: 1,
-              py: 0.5,
-              borderRadius: 1,
-            }}
-          >
-            You
-          </Typography>
-        </Box>
-
-        {/* Remote Videos */}
-        {remoteStreams.map(({ socketId, stream }) => (
-          <Box key={socketId} position="relative">
+        <Grid item xs={12 / gridCols} sm={6} md={4} lg={3} xl={2}>
+          <Box sx={{ position: "relative" }}>
             <video
+              ref={localVideoRef}
               autoPlay
+              muted
               playsInline
               style={{
-                width: videoSize.width,
-                height: videoSize.height,
-                borderRadius: 8,
+                width: "100%",
+                aspectRatio: "1 / 1",
+                borderRadius: "10px",
                 backgroundColor: "#000",
                 objectFit: "cover",
-                border: "2px solid #2196F3",
+                border: "2px solid #4CAF50",
               }}
-              ref={videoEl => {
-                if (videoEl && stream) {
-                  if (videoEl.srcObject !== stream) {
-                    videoEl.srcObject = stream;
-                  }
-                }
-              }}
-              onLoadedMetadata={() => console.log("📺 Video metadata loaded for", socketId)}
-              onPlay={() => console.log("▶️ Video playing for", socketId)}
-              onError={(e) => console.error("❌ Video error for", socketId, e)}
             />
             <Typography
               variant="caption"
               sx={{
                 position: "absolute",
-                bottom: 8,
-                left: 8,
-                bgcolor: "rgba(0,0,0,0.7)",
-                color: "white",
+                bottom: 6,
+                left: 6,
+                bgcolor: "rgba(0,0,0,0.6)",
+                color: "#fff",
                 px: 1,
-                py: 0.5,
                 borderRadius: 1,
               }}
             >
-              User {socketId.slice(-4)}
+              You
             </Typography>
           </Box>
+        </Grid>
+
+        {/* Remote Videos */}
+        {remoteStreams.map(({ socketId, stream }) => (
+          <Grid key={socketId} item xs={12 / gridCols} sm={6} md={4} lg={3} xl={2}>
+            <Box sx={{ position: "relative" }}>
+              <video
+                autoPlay
+                playsInline
+                style={{
+                  width: "100%",
+                  aspectRatio: "1 / 1",
+                  borderRadius: "10px",
+                  backgroundColor: "#000",
+                  objectFit: "cover",
+                  border: "2px solid #2196F3",
+                }}
+                ref={(el) => {
+                  if (el && stream && el.srcObject !== stream) el.srcObject = stream;
+                }}
+              />
+              <Typography
+                variant="caption"
+                sx={{
+                  position: "absolute",
+                  bottom: 6,
+                  left: 6,
+                  bgcolor: "rgba(0,0,0,0.6)",
+                  color: "#fff",
+                  px: 1,
+                  borderRadius: 1,
+                }}
+              >
+                User {socketId.slice(-4)}
+              </Typography>
+            </Box>
+          </Grid>
         ))}
-      </Box>
+      </Grid>
     </Box>
   );
 }
