@@ -19,9 +19,12 @@ fastapi_app = FastAPI(title="🎮 GameHub Backend")
 fastapi_app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://gamehubjiji-044p.onrender.com",
+        "https://gamehubjiji-044p.onrender.com",  # Your frontend deployment
+        "https://gamehubjijiplease.onrender.com",  # Your backend deployment (if making requests to itself)
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
     ],
     allow_credentials=True,
     allow_methods=["*"],
