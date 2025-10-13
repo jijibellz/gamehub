@@ -1,9 +1,19 @@
 #!/bin/bash
 # Start script for Render deployment
 
-# Install dependencies
+# Install Python dependencies
 pip install -r requirements.txt
 
-# Start the server with Socket.IO support
-# IMPORTANT: Use socket_app instead of app
-uvicorn main:socket_app --host 0.0.0.0 --port ${PORT:-8000}
+# Install Node.js dependencies
+npm install
+
+# Start the Python FastAPI server
+echo "Starting GameHub FastAPI backend..."
+uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --log-level info &
+
+# Start the Node.js Socket.IO server
+echo "Starting Socket.IO server..."
+node server.js &
+
+# Wait for both processes
+wait

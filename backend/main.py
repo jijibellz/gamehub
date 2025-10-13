@@ -100,3 +100,8 @@ app = create_socketio_app(fastapi_app)
 
 # ✅ Expose the Socket.IO app for uvicorn
 socket_app = app
+
+# ✅ Add a simple Socket.IO test endpoint
+@app.get("/socket.io/test")
+def socketio_test():
+    return {"message": "Socket.IO server is running", "status": "ok"}

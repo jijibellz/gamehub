@@ -8,17 +8,13 @@ from typing import Dict, Set
 # Create Socket.IO server with ASGI support
 sio = socketio.AsyncServer(
     async_mode='asgi',
-    cors_allowed_origins=[
-        "https://gamehubjiji-044p.onrender.com",
-        "https://gamehubjijiplease.onrender.com",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000"
-    ],
+    cors_allowed_origins="*",
     logger=True,
     engineio_logger=True,
     cors_credentials=True,
+    ping_timeout=60,
+    ping_interval=25,
+    async_handlers=True,
 )
 
 # ======== ROOM TRACKERS ========
@@ -271,6 +267,5 @@ async def disconnect(sid):
 # ======== COMBINE WITH FASTAPI ========
 def create_socketio_app(fastapi_app):
     """Combine FastAPI with Socket.IO."""
-    return socketio.ASGIApp(
-        sio, other_asgi_app=fastapi_app, socketio_path="/socket.io"
-    )
+    # Create ASGI app with Socket.IO properly integrated
+    return socketio.ASGIApp(sio, other_asgi_app=fastapi_app)

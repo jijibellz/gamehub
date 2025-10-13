@@ -76,17 +76,28 @@ export default function ServerChat({ serverName, channelName = "general", curren
 
     socket.on('connect', () => {
       console.log('✅ Connected to Socket.IO server');
+      console.log('Socket ID:', socket.id);
       setIsConnected(true);
     });
 
     socket.on('connect_error', (error) => {
       console.error('❌ Socket.IO connection error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        description: error.description,
+        context: error.context,
+        type: error.type
+      });
       setIsConnected(false);
     });
 
     socket.on('disconnect', (reason) => {
       console.log('🔌 Disconnected from Socket.IO server:', reason);
       setIsConnected(false);
+    });
+
+    socket.on('error', (error) => {
+      console.error('❌ Socket.IO error:', error);
     });
 
     // Join the channel room
