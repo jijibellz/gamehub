@@ -1,6 +1,6 @@
 // VideoCallComponent.jsx
 import { useEffect, useRef, useState } from "react";
-import { Box, Button } from "@mui/material";
+import { Box, Button, Typography } from "@mui/material";
 import { io } from "socket.io-client";
 import { SOCKET_SERVER_URL } from "../api/routes";
 
@@ -173,18 +173,27 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
 
     // Handle remote track
     pc.ontrack = event => {
-      console.log("📹 Received remote track from", socketId, event);
+      console.log("📹 Received remote track from", socketId, "tracks:", event.streams?.length || 0);
       if (!event.streams || event.streams.length === 0) {
-        console.warn("No streams in track event");
+        console.warn("⚠️ No streams in track event for", socketId);
         return;
       }
-      
+
       const remoteStream = event.streams[0];
+      console.log("🎥 Remote stream tracks:", remoteStream.getTracks().length);
+
       setRemoteStreams(prev => {
-        // check if stream already exists
-        if (prev.find(s => s.socketId === socketId)) return prev;
-        // Store as object with socketId and stream
-        return [...prev, { socketId, stream: remoteStream }];
+        // Check if we already have a stream from this user
+        const existingIndex = prev.findIndex(s => s.socketId === socketId);
+        if (existingIndex >= 0) {
+          console.log("🔄 Updating existing remote stream for", socketId);
+          const updated = [...prev];
+          updated[existingIndex] = { socketId, stream: remoteStream };
+          return updated;
+        } else {
+          console.log("➕ Adding new remote stream for", socketId);
+          return [...prev, { socketId, stream: remoteStream }];
+        }
       });
     };
 
@@ -231,34 +240,92 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
 
   return (
     <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height="100%" gap={2}>
+      {/* Call status */}
+      <Box textAlign="center" mb={2}>
+        <Typography variant="h6" color="white">
+          Video Call - {remoteStreams.length + 1} participant{remoteStreams.length !== 0 ? 's' : ''}
+        </Typography>
+        {remoteStreams.length === 0 && (
+          <Typography variant="body2" color="#888" mt={1}>
+            Waiting for others to join...
+          </Typography>
+        )}
+      </Box>
+
       <Box display="flex" gap={2} justifyContent="center" flexWrap="wrap">
-        <video
-          ref={localVideoRef}
-          autoPlay
-          muted
-          style={{
-            width: 300,
-            height: 300,
-            borderRadius: 8,
-            backgroundColor: "#000",
-            objectFit: "cover",
-          }}
-        />
-        {remoteStreams.map(({ socketId, stream }) => (
+        {/* Local video */}
+        <Box position="relative">
           <video
-            key={socketId}
+            ref={localVideoRef}
             autoPlay
+            muted
+            playsInline
             style={{
               width: 300,
               height: 300,
               borderRadius: 8,
               backgroundColor: "#000",
               objectFit: "cover",
-            }}
-            ref={videoEl => {
-              if (videoEl) videoEl.srcObject = stream;
+              border: "2px solid #4CAF50",
             }}
           />
+          <Typography
+            variant="caption"
+            sx={{
+              position: "absolute",
+              bottom: 8,
+              left: 8,
+              bgcolor: "rgba(0,0,0,0.7)",
+              color: "white",
+              px: 1,
+              py: 0.5,
+              borderRadius: 1,
+            }}
+          >
+            You
+          </Typography>
+        </Box>
+
+        {/* Remote videos */}
+        {remoteStreams.map(({ socketId, stream }) => (
+          <Box key={socketId} position="relative">
+            <video
+              autoPlay
+              playsInline
+              style={{
+                width: 300,
+                height: 300,
+                borderRadius: 8,
+                backgroundColor: "#000",
+                objectFit: "cover",
+                border: "2px solid #2196F3",
+              }}
+              ref={videoEl => {
+                if (videoEl && stream) {
+                  console.log("🎬 Setting srcObject for", socketId, "stream tracks:", stream.getTracks().length);
+                  videoEl.srcObject = stream;
+                }
+              }}
+              onLoadedMetadata={() => console.log("📺 Video metadata loaded for", socketId)}
+              onPlay={() => console.log("▶️ Video playing for", socketId)}
+              onError={(e) => console.error("❌ Video error for", socketId, e)}
+            />
+            <Typography
+              variant="caption"
+              sx={{
+                position: "absolute",
+                bottom: 8,
+                left: 8,
+                bgcolor: "rgba(0,0,0,0.7)",
+                color: "white",
+                px: 1,
+                py: 0.5,
+                borderRadius: 1,
+              }}
+            >
+              User {socketId.slice(-4)}
+            </Typography>
+          </Box>
         ))}
       </Box>
       <Button variant="contained" color="error" onClick={handleLeaveCall}>
