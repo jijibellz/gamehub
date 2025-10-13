@@ -27,6 +27,7 @@ export default function ServerChat({ serverName, channelName = "general", curren
   const [gifAnchor, setGifAnchor] = useState(null);
   const [gifSearch, setGifSearch] = useState("");
   const [gifs, setGifs] = useState([]);
+  const [loadingGifs, setLoadingGifs] = useState(false);
   const messagesEndRef = useRef(null);
 
   const socketRef = useRef(null);
