@@ -21,15 +21,15 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
   // Constants
   const MAX_PARTICIPANTS = 20;
   const getVideoSize = (participantCount) => {
-    // Square sizing that scales down uniformly for all participants
-    if (participantCount <= 1) return { size: 400 };
-    if (participantCount <= 2) return { size: 350 };
-    if (participantCount <= 4) return { size: 300 };
-    if (participantCount <= 6) return { size: 250 };
-    if (participantCount <= 9) return { size: 200 };
-    if (participantCount <= 12) return { size: 180 };
-    if (participantCount <= 16) return { size: 160 };
-    return { size: 140 }; // For 17-20 participants
+    // Much smaller squares that fit in panel without scrolling
+    if (participantCount <= 1) return { size: 200 };
+    if (participantCount <= 2) return { size: 180 };
+    if (participantCount <= 4) return { size: 150 };
+    if (participantCount <= 6) return { size: 130 };
+    if (participantCount <= 9) return { size: 110 };
+    if (participantCount <= 12) return { size: 100 };
+    if (participantCount <= 16) return { size: 90 };
+    return { size: 80 }; // For 17-20 participants
   };
 
   const getGridLayout = (participantCount) => {
@@ -365,13 +365,14 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
           display: "grid",
           gridTemplateColumns: `repeat(${gridLayout.cols}, 1fr)`,
           gridTemplateRows: `repeat(${gridLayout.rows}, 1fr)`,
-          gap: 1.5,
+          gap: 2,
           justifyContent: "center",
           alignContent: "center",
-          p: 2,
-          maxHeight: "calc(100vh - 200px)",
-          overflow: "auto",
-          minHeight: 0,
+          p: 3,
+          maxHeight: "calc(100vh - 250px)",
+          maxWidth: "calc(100vw - 100px)",
+          margin: "0 auto",
+          justifySelf: "center",
         }}
       >
         {/* Local Video */}
