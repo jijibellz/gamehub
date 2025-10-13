@@ -56,73 +56,63 @@ export default function VideoCallComponent({
         if (!currentUser?.username) return;
 
         localStream = await navigator.mediaDevices.getUserMedia({
-          video: true,
+          video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            facingMode: "user"
+          },
           audio: true,
         });
+        console.log("📹 Local stream obtained:", localStream.getTracks().length, "tracks");
         if (!mounted) return;
         setStream(localStream);
-        if (localVideoRef.current)
+        if (localVideoRef.current) {
           localVideoRef.current.srcObject = localStream;
+          console.log("📹 Local video element assigned stream");
+        }
+        // connect to signaling server
+        socketRef.current = io(SOCKET_SERVER_URL, {
+          transports: ["websocket"],
+        });
+        console.log("🔌 Connected to Socket.IO server");
+
+        socketRef.current.on("connect", () => {
+          console.log("✅ Socket.IO connected successfully");
+        });
+        socketRef.current.on("disconnect", () => {
+          console.log("❌ Socket.IO disconnected");
+          if (onRoomFull) onRoomFull(true);
+        });
+
+        socketRef.current.on("connect_error", (error) => {
+          console.error("❌ Socket.IO connection error:", error);
+          if (onRoomFull) onRoomFull(true);
+        });
 
         socketRef.current.emit("join_room", {
           roomId: channelName,
           userId: currentUser.username,
         });
-
-        socketRef.current.on("user-joined", ({ userId, socketId }) => {
-          if (socketId === socketRef.current.id) return;
-
-          const pc = createPeerConnection(socketId, localStream);
-          peerConnectionsRef.current = {
-            ...peerConnectionsRef.current,
-            [socketId]: pc,
-          };
-
-          (async () => {
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            socketRef.current.emit("offer", {
-              to: socketId,
-              offer,
-              from: socketRef.current.id,
-            });
-          })();
-        });
-
-        socketRef.current.on("offer", async ({ from, offer }) => {
-          const pc = createPeerConnection(from, localStream);
-          peerConnectionsRef.current = {
-            ...peerConnectionsRef.current,
-            [from]: pc,
-          };
-          await pc.setRemoteDescription(offer);
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          socketRef.current.emit("answer", {
-            to: from,
-            answer,
-            from: socketRef.current.id,
-          });
-        });
-
-        socketRef.current.on("answer", async ({ from, answer }) => {
-          const pc = peerConnectionsRef.current[from];
-          if (pc) await pc.setRemoteDescription(answer);
-        });
-
-        socketRef.current.on("ice-candidate", async ({ from, candidate }) => {
-          const pc = peerConnectionsRef.current[from];
-          if (pc && candidate) await pc.addIceCandidate(candidate);
-        });
-
-        socketRef.current.on("user_left", ({ socketId }) => {
-          const pc = peerConnectionsRef.current[socketId];
-          if (pc) pc.close();
-          delete peerConnectionsRef.current[socketId];
-          removeRemoteStream(socketId);
-        });
       } catch (err) {
-        console.error(err);
+        console.error("❌ Error getting media access:", err);
+        // Fallback to basic constraints
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true,
+          });
+          console.log("📹 Fallback stream obtained:", localStream.getTracks().length, "tracks");
+          if (!mounted) return;
+          setStream(localStream);
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = localStream;
+            console.log("📹 Local video element assigned fallback stream");
+          }
+        } catch (fallbackErr) {
+          console.error("❌ Fallback media access also failed:", fallbackErr);
+          alert("Camera and microphone access required for video calls");
+          return;
+        }
       }
     };
 
@@ -154,8 +144,10 @@ export default function VideoCallComponent({
       pc.addTrack(track, localStream)
     );
 
-    pc.ontrack = (event) =>
+    pc.ontrack = (event) => {
+      console.log("🎥 Received remote stream for", remoteSocketId, "tracks:", event.streams[0]?.getTracks().length);
       addOrUpdateRemoteStream(remoteSocketId, event.streams[0]);
+    };
 
     pc.onicecandidate = (event) => {
       if (event.candidate)
@@ -237,6 +229,9 @@ export default function VideoCallComponent({
                 objectFit: "cover",
                 border: "2px solid #4CAF50",
               }}
+              onLoadedMetadata={() => console.log("📹 Local video metadata loaded")}
+              onPlay={() => console.log("▶️ Local video playing")}
+              onError={(e) => console.error("❌ Local video error:", e)}
             />
             <Typography
               variant="caption"
@@ -270,9 +265,15 @@ export default function VideoCallComponent({
                 border: "2px solid #2196F3",
               }}
               ref={(el) => {
-                if (el && stream && el.srcObject !== stream)
+                if (el && stream && el.srcObject !== stream) {
                   el.srcObject = stream;
+                  console.log("📺 Remote video element assigned stream for", socketId);
+                  el.play().catch(e => console.error("❌ Error playing remote video:", e));
+                }
               }}
+              onLoadedMetadata={() => console.log("📺 Video metadata loaded for", socketId)}
+              onPlay={() => console.log("▶️ Video playing for", socketId)}
+              onError={(e) => console.error("❌ Video error for", socketId, e)}
             />
             <Typography
               variant="caption"
