@@ -97,3 +97,6 @@ def root():
 # ✅ Wrap FastAPI with Socket.IO
 # This must be the *final* app that Render runs
 app = create_socketio_app(fastapi_app)
+
+# ✅ Expose the Socket.IO app for uvicorn
+socket_app = app

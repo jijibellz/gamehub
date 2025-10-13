@@ -12,10 +12,13 @@ sio = socketio.AsyncServer(
         "https://gamehubjiji-044p.onrender.com",
         "https://gamehubjijiplease.onrender.com",
         "http://localhost:5173",
-        "http://127.0.0.1:5173"
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000"
     ],
     logger=True,
-    engineio_logger=False,
+    engineio_logger=True,
+    cors_credentials=True,
 )
 
 # ======== ROOM TRACKERS ========
@@ -147,6 +150,22 @@ async def join_channel(sid, data):
         if not server_name or not channel_name:
             return
 
+        # Validate that user is a member of the server
+        from models import Server, User
+        try:
+            server = Server.nodes.get_or_none(name=server_name)
+            if not server:
+                print(f"❌ Server '{server_name}' not found")
+                return
+
+            # For now, we'll allow joining if server exists
+            # In the future, you might want to validate the specific user
+            # by getting user info from the connection or token
+
+        except Exception as e:
+            print(f"❌ Error validating server membership: {e}")
+            return
+
         room_key = f"{server_name}:{channel_name}"
         await sio.enter_room(sid, room_key)
 
@@ -195,9 +214,27 @@ async def new_message(sid, data):
             print(f"❌ Invalid new_message data from {sid}: {data}")
             return
 
+        # Validate that user is a member of the server before broadcasting
+        from models import Server, User
+        try:
+            server = Server.nodes.get_or_none(name=server_name)
+            if not server:
+                print(f"❌ Server '{server_name}' not found")
+                return
+
+            sender_username = message.get("user")
+            if sender_username:
+                sender = User.nodes.get_or_none(username=sender_username)
+                if not sender or sender not in server.members:
+                    print(f"❌ User '{sender_username}' is not a member of server '{server_name}'")
+                    return
+        except Exception as e:
+            print(f"❌ Error validating message sender: {e}")
+            return
+
         room_key = f"{server_name}:{channel_name}"
+        print(f"📨 Broadcasting message to room {room_key}: {message.get('user')} - {message.get('content', '')[:50]}...")
         await sio.emit("message-received", message, room=room_key)
-        print(f"📨 Message broadcast to {room_key}: {message.get('user')}")
 
     except Exception as e:
         print(f"❌ Error in new_message: {e}")

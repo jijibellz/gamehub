@@ -26,7 +26,6 @@ export default function ServerChat({ serverName, channelName = "general", curren
   const [emojiAnchor, setEmojiAnchor] = useState(null);
   const [gifAnchor, setGifAnchor] = useState(null);
   const [gifSearch, setGifSearch] = useState("");
-  const [gifs, setGifs] = useState([]);
   const [loadingGifs, setLoadingGifs] = useState(false);
   const [inVideoCall, setInVideoCall] = useState(false);
   const messagesEndRef = useRef(null);
@@ -39,8 +38,9 @@ export default function ServerChat({ serverName, channelName = "general", curren
   const [audioURL, setAudioURL] = useState(null);
   const [recordError, setRecordError] = useState("");
 
-  // WebSocket ref
+  // WebSocket ref and connection state
   const socketRef = useRef(null);
+  const [isConnected, setIsConnected] = useState(false);
 
   // Auto-scroll
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -68,24 +68,40 @@ export default function ServerChat({ serverName, channelName = "general", curren
     fetchMessages();
 
     // Setup WebSocket connection
-    socketRef.current = io(SOCKET_SERVER_URL);
+    const socket = io(SOCKET_SERVER_URL, {
+      transports: ['websocket', 'polling'],
+      timeout: 20000,
+    });
+
+    socket.on('connect', () => {
+      console.log('✅ Connected to Socket.IO server');
+      setIsConnected(true);
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('❌ Socket.IO connection error:', error);
+      setIsConnected(false);
+    });
+
+    socket.on('disconnect', (reason) => {
+      console.log('🔌 Disconnected from Socket.IO server:', reason);
+      setIsConnected(false);
+    });
 
     // Join the channel room
-    // Join the channel
-    socketRef.current.emit("join_channel", { serverName, channelName });
-
+    socket.emit("join_channel", { serverName, channelName });
 
     // Listen for new messages
-    socketRef.current.on("message-received", (message) => {
+    socket.on("message-received", (message) => {
       console.log("📩 New message received:", message);
       setMessages((prev) => {
         // Avoid duplicates by checking if message already exists
-        const exists = prev.some((m) => 
-          m.id === message.id || 
+        const exists = prev.some((m) =>
+          m.id === message.id ||
           (m.timestamp === message.timestamp && m.user === message.user)
         );
         if (exists) return prev;
-        
+
         return [
           ...prev,
           {
@@ -96,11 +112,13 @@ export default function ServerChat({ serverName, channelName = "general", curren
       });
     });
 
+    socketRef.current = socket;
+
     // Cleanup on unmount or channel change
     return () => {
       if (socketRef.current) {
-        socketRef.current.emit("leave_channel", { serverName, channelName });
-        socketRef.current.disconnect();
+        socket.emit("leave_channel", { serverName, channelName });
+        socket.disconnect();
       }
     };
   }, [serverName, channelName, currentUser]);
@@ -127,13 +145,15 @@ export default function ServerChat({ serverName, channelName = "general", curren
       // Add message to local state immediately so user sees it right away
       setMessages((prev) => [...prev, newMessage]);
 
-      // Broadcast via WebSocket
-      if (socketRef.current) {
+      // Broadcast via WebSocket (only if connected)
+      if (socketRef.current && socketRef.current.connected) {
         socketRef.current.emit("new-message", {
           serverName,
           channelName,
           message: newMessage,
         });
+      } else {
+        console.warn('⚠️ Socket not connected, message may not be broadcast in real-time');
       }
 
       setInput("");
@@ -265,13 +285,15 @@ export default function ServerChat({ serverName, channelName = "general", curren
         timestamp: new Date().toISOString(),
       };
 
-      // Broadcast via WebSocket
-      if (socketRef.current) {
+      // Broadcast via WebSocket (only if connected)
+      if (socketRef.current && socketRef.current.connected) {
         socketRef.current.emit("new-message", {
           serverName,
           channelName,
           message: newMessage,
         });
+      } else {
+        console.warn('⚠️ Socket not connected, voice message may not be broadcast in real-time');
       }
 
       // reset
@@ -290,6 +312,28 @@ export default function ServerChat({ serverName, channelName = "general", curren
 
   return (
     <Box display="flex" flexDirection="column" bgcolor="#36393f" height="100%">
+      {/* Connection Status Indicator */}
+      <Box
+        px={2}
+        py={1}
+        bgcolor={isConnected ? "#2e7d32" : "#d32f2f"}
+        display="flex"
+        alignItems="center"
+        gap={1}
+      >
+        <Box
+          sx={{
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            bgcolor: isConnected ? "#4caf50" : "#f44336",
+          }}
+        />
+        <Typography variant="caption" color="white">
+          {isConnected ? "🟢 Connected" : "🔴 Disconnected"}
+        </Typography>
+      </Box>
+
       {/* Tabs - Fixed at top */}
       <Box px={2} pt={2}>
         <Tabs
