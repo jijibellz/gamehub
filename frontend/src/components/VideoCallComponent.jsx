@@ -6,170 +6,218 @@ import { SOCKET_SERVER_URL } from "../api/routes";
 
 export default function VideoCallComponent({ serverName, channelName, currentUser, onLeaveCall }) {
   const localVideoRef = useRef(null);
-  const [remoteStreams, setRemoteStreams] = useState([]); // array of {socketId, stream}
-  const [peerConnections, setPeerConnections] = useState({}); // {socketId: RTCPeerConnection}
+
+  // visible state
+  const [remoteStreams, setRemoteStreams] = useState([]); // [{ socketId, stream }]
   const [stream, setStream] = useState(null);
+
+  // refs for mutable values used in callbacks
   const socketRef = useRef(null);
+  const peerConnectionsRef = useRef({}); // { socketId: RTCPeerConnection }
+  const remoteStreamsRef = useRef([]); // mirror of remoteStreams to avoid closure issues
+
+  // helper to update both ref + state
+  const addOrUpdateRemoteStream = (socketId, remoteStream) => {
+    const idx = remoteStreamsRef.current.findIndex(s => s.socketId === socketId);
+    if (idx >= 0) {
+      const updated = [...remoteStreamsRef.current];
+      updated[idx] = { socketId, stream: remoteStream };
+      remoteStreamsRef.current = updated;
+      setRemoteStreams(updated);
+    } else {
+      const updated = [...remoteStreamsRef.current, { socketId, stream: remoteStream }];
+      remoteStreamsRef.current = updated;
+      setRemoteStreams(updated);
+    }
+  };
+
+  const removeRemoteStream = (socketId) => {
+    const updated = remoteStreamsRef.current.filter(s => s.socketId !== socketId);
+    remoteStreamsRef.current = updated;
+    setRemoteStreams(updated);
+  };
 
   useEffect(() => {
+    let mounted = true;
     let localStream;
-    
 
     const initCall = async () => {
       try {
-        // Check if currentUser exists
         if (!currentUser?.username) {
-          console.error("Cannot join video call: currentUser is undefined");
+          console.error("Cannot join video call: missing currentUser.username");
           return;
         }
 
-        // 1️⃣ get local stream
+        // get local media
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        if (!mounted) return;
         setStream(localStream);
         if (localVideoRef.current) localVideoRef.current.srcObject = localStream;
 
-        // 2️⃣ connect to signaling server
-        socketRef.current = io(SOCKET_SERVER_URL);
+        // connect to signaling server
+        socketRef.current = io(SOCKET_SERVER_URL, {
+          transports: ["websocket"],
+        });
 
-        socketRef.current.emit("join-room", {
+        // Emit join_room (server expects join_room)
+        socketRef.current.emit("join_room", {
           roomId: channelName,
           userId: currentUser.username,
         });
 
-        // 3️⃣ listen for other users joining
+        // When a new user joins the room (other clients receive this)
         socketRef.current.on("user-joined", ({ userId, socketId }) => {
-          console.log("🆕 New user joined:", userId, "socketId:", socketId);
+          console.log("🆕 New user joined:", userId, socketId);
 
-          // Don't connect to yourself
-          if (socketId === socketRef.current.id) {
-            console.log("⚠️ Ignoring self-connection");
+          // don't connect to self
+          if (socketId === socketRef.current.id) return;
+
+          // if already have pc skip
+          if (peerConnectionsRef.current[socketId]) {
+            console.log("Already have PC for", socketId);
             return;
           }
 
-          // Check if we already have a connection with this user
-          if (peerConnections[socketId]) {
-            console.log("⚠️ Already have connection with", socketId);
-            return;
-          }
-
+          // create pc as existing participant (we will be the caller to the newcomer)
           const pc = createPeerConnection(socketId, localStream);
-          setPeerConnections(prev => ({ ...prev, [socketId]: pc }));
 
-          // create and send offer
-          pc.createOffer()
-            .then(offer => {
-              pc.setLocalDescription(offer);
-              console.log("📤 Sending offer to", socketId);
-              socketRef.current.emit("offer", { to: socketId, offer, from: socketRef.current.id });
-            })
-            .catch(err => console.error("Error creating offer:", err));
+          peerConnectionsRef.current = { ...peerConnectionsRef.current, [socketId]: pc };
+
+          // create offer and send to the newcomer
+          (async () => {
+            try {
+              const offer = await pc.createOffer();
+              await pc.setLocalDescription(offer);
+              socketRef.current.emit("offer", {
+                to: socketId,
+                offer,
+                from: socketRef.current.id,
+              });
+              console.log("📤 Offer sent to", socketId);
+            } catch (err) {
+              console.error("Error creating/sending offer:", err);
+            }
+          })();
         });
 
-        // 4️⃣ handle incoming offer
-       // 4️⃣ handle incoming offer
-socketRef.current.on("offer", async ({ from, offer }) => {
-  console.log("📥 Received offer from", from);
+        // Handle incoming offer (we are callee)
+        socketRef.current.on("offer", async ({ from, offer }) => {
+          console.log("📥 Received offer from", from);
 
-  // Check if we already have a connection with this user
-  if (peerConnections[from]) {
-    console.log("⚠️ Already have connection with", from, "- ignoring duplicate offer");
-    return;
-  }
+          // If pc already exists, ignore duplicate (or optionally replace)
+          if (peerConnectionsRef.current[from]) {
+            console.log("Duplicate offer: PC already exists for", from);
+            return;
+          }
 
-  const pc = createPeerConnection(from, localStream);
-  setPeerConnections(prev => ({ ...prev, [from]: pc }));
+          const pc = createPeerConnection(from, localStream);
+          peerConnectionsRef.current = { ...peerConnectionsRef.current, [from]: pc };
 
-  await pc.setRemoteDescription(offer);
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
+          try {
+            await pc.setRemoteDescription(offer);
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
 
-  // ✨ SEND ANSWER BACK TO OFFERER ✨
-  socketRef.current.emit("answer", {
-    to: from,
-    answer,
-    from: socketRef.current.id,
-  });
+            // send answer back (server expects 'answer' event)
+            socketRef.current.emit("answer", {
+              to: from,
+              answer,
+              from: socketRef.current.id,
+            });
+            console.log("📤 Answer sent to", from);
+          } catch (err) {
+            console.error("Error handling offer from", from, err);
+          }
+        });
 
-  console.log("📤 Sending answer to", from);
-});
-
-        // 5️⃣ handle incoming answer
+        // Handle incoming answer (caller receives this)
         socketRef.current.on("answer", async ({ from, answer }) => {
           console.log("📥 Received answer from", from);
-          setPeerConnections(prev => {
-            const pc = prev[from];
-            if (pc) {
-              pc.setRemoteDescription(answer).catch(err =>
-                console.error("Error setting remote description:", err)
-              );
-            } else {
-              console.warn("⚠️ No peer connection found for", from);
-            }
-            return prev;
-          });
+          const pc = peerConnectionsRef.current[from];
+          if (!pc) {
+            console.warn("No PC found for answer from", from);
+            return;
+          }
+          try {
+            await pc.setRemoteDescription(answer);
+          } catch (err) {
+            console.error("Error setting remote description for answer:", err);
+          }
         });
 
-        // 6️⃣ handle ICE candidates
-        socketRef.current.on("ice-candidate", ({ from, candidate }) => {
-          console.log("🧊 Received ICE candidate from", from);
-          setPeerConnections(prev => {
-            const pc = prev[from];
-            if (pc && candidate) {
-              pc.addIceCandidate(candidate).catch(err =>
-                console.error("Error adding ICE candidate:", err)
-              );
-            }
-            return prev;
-          });
+        // Server forwards ICE as event name "ice-candidate" (hyphen) — we listen for that
+        socketRef.current.on("ice-candidate", async ({ from, candidate }) => {
+          // sanity
+          if (!candidate || !from) return;
+          const pc = peerConnectionsRef.current[from];
+          if (!pc) {
+            console.warn("No PC when receiving candidate from", from);
+            return;
+          }
+          try {
+            await pc.addIceCandidate(candidate);
+            // console.log("Added ICE candidate from", from);
+          } catch (err) {
+            console.error("Error adding ICE candidate:", err);
+          }
         });
 
-        // 7️⃣ handle user leaving
+        // When someone leaves
         socketRef.current.on("user-left", ({ socketId }) => {
           console.log("User left:", socketId);
-          setPeerConnections(prev => {
-            const pc = prev[socketId];
-            if (pc) pc.close();
-            const newPeers = { ...prev };
-            delete newPeers[socketId];
-            return newPeers;
-          });
-          setRemoteStreams(prev => prev.filter(s => s.socketId !== socketId));
+          const pc = peerConnectionsRef.current[socketId];
+          if (pc) {
+            try { pc.close(); } catch (e) {}
+            const copy = { ...peerConnectionsRef.current };
+            delete copy[socketId];
+            peerConnectionsRef.current = copy;
+          }
+          removeRemoteStream(socketId);
         });
+
+        // debug / server logs
+        socketRef.current.on("connect", () => console.log("Socket connected:", socketRef.current.id));
+        socketRef.current.on("disconnect", (reason) => console.log("Socket disconnected:", reason));
+        socketRef.current.on("connect_error", (err) => console.error("Socket connect_error:", err));
       } catch (err) {
-        console.error("Error accessing media devices.", err);
+        console.error("Error in initCall:", err);
       }
     };
 
     initCall();
 
     return () => {
-      // cleanup on leave/unmount
-      if (socketRef.current) socketRef.current.disconnect();
-      if (stream) stream.getTracks().forEach(track => track.stop());
-      Object.values(peerConnections).forEach(pc => pc.close());
+      mounted = false;
+      // cleanup
+      try {
+        if (socketRef.current) {
+          // tell server we're leaving the video room (server handler is leave_room)
+          socketRef.current.emit("leave_room", { roomId: channelName });
+          socketRef.current.disconnect();
+        }
+      } catch (e) {}
+      if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+      }
+      // close all peer connections
+      Object.values(peerConnectionsRef.current).forEach(pc => {
+        try { pc.close(); } catch (e) {}
+      });
+      peerConnectionsRef.current = {};
+      remoteStreamsRef.current = [];
+      setRemoteStreams([]);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const createPeerConnection = (socketId, localStream) => {
+  function createPeerConnection(remoteSocketId, localStream) {
     const pc = new RTCPeerConnection({
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
-        // Multiple TURN servers for redundancy
+        // optional TURNs...
         {
           urls: 'turn:openrelay.metered.ca:80',
-          username: 'openrelayproject',
-          credential: 'openrelayproject',
-        },
-        {
-          urls: 'turn:openrelay.metered.ca:443',
-          username: 'openrelayproject',
-          credential: 'openrelayproject',
-        },
-        {
-          urls: 'turn:openrelay.metered.ca:443?transport=tcp',
           username: 'openrelayproject',
           credential: 'openrelayproject',
         },
@@ -177,79 +225,68 @@ socketRef.current.on("offer", async ({ from, offer }) => {
       iceCandidatePoolSize: 10,
     });
 
-    // Add local tracks
-    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+    // add local tracks
+    if (localStream) {
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+    }
 
-    // Handle remote track
-    pc.ontrack = event => {
-      console.log("📹 Received remote track from", socketId, "tracks:", event.streams?.length || 0);
+    // when remote track(s) received
+    pc.ontrack = (event) => {
       if (!event.streams || event.streams.length === 0) {
-        console.warn("⚠️ No streams in track event for", socketId);
+        console.warn("No streams on ontrack for", remoteSocketId);
         return;
       }
-
       const remoteStream = event.streams[0];
-      console.log("🎥 Remote stream tracks:", remoteStream.getTracks().length);
-
-      setRemoteStreams(prev => {
-        // Check if we already have a stream from this user
-        const existingIndex = prev.findIndex(s => s.socketId === socketId);
-        if (existingIndex >= 0) {
-          console.log("🔄 Updating existing remote stream for", socketId);
-          const updated = [...prev];
-          updated[existingIndex] = { socketId, stream: remoteStream };
-          return updated;
-        } else {
-          console.log("➕ Adding new remote stream for", socketId);
-          return [...prev, { socketId, stream: remoteStream }];
-        }
-      });
+      addOrUpdateRemoteStream(remoteSocketId, remoteStream);
+      console.log("Received remote stream for", remoteSocketId, "tracks:", remoteStream.getTracks().length);
     };
 
-    // Handle ICE candidates
-    pc.onicecandidate = event => {
+    // send ICE candidates to the other peer
+    pc.onicecandidate = (event) => {
       if (event.candidate) {
-        socketRef.current.emit("ice-candidate", {
-          to: socketId,
+        // server expects incoming candidate event name: "ice_candidate" (underscore)
+        socketRef.current.emit("ice_candidate", {
+          to: remoteSocketId,
           candidate: event.candidate,
           from: socketRef.current.id,
         });
       }
     };
 
-    // Handle connection state changes
     pc.onconnectionstatechange = () => {
-      console.log(`🔗 Connection state with ${socketId}:`, pc.connectionState);
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        console.warn(`Connection ${pc.connectionState} with ${socketId}`);
+      console.log(`Connection state (${remoteSocketId}):`, pc.connectionState);
+      if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+        // optional: try restart or cleanup
       }
     };
 
-    // Handle ICE connection state
     pc.oniceconnectionstatechange = () => {
-      console.log(`🧊 ICE state with ${socketId}:`, pc.iceConnectionState);
+      console.log(`ICE state (${remoteSocketId}):`, pc.iceConnectionState);
     };
 
     return pc;
-  };
+  }
 
   const handleLeaveCall = () => {
+    // tell server we're leaving
+    try {
+      if (socketRef.current) socketRef.current.emit("leave_room", { roomId: channelName });
+      if (socketRef.current) socketRef.current.disconnect();
+    } catch (e) {}
     // stop local stream
-    if (stream) stream.getTracks().forEach(track => track.stop());
-
+    if (stream) stream.getTracks().forEach(t => t.stop());
     // close all peer connections
-    Object.values(peerConnections).forEach(pc => pc.close());
-
-    // disconnect from signaling server
-    if (socketRef.current) socketRef.current.disconnect();
-
-    // call parent callback to restore join button
+    Object.values(peerConnectionsRef.current).forEach(pc => {
+      try { pc.close(); } catch (e) {}
+    });
+    peerConnectionsRef.current = {};
+    remoteStreamsRef.current = [];
+    setRemoteStreams([]);
     if (onLeaveCall) onLeaveCall();
   };
 
   return (
     <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height="100%" gap={2}>
-      {/* Call status */}
       <Box textAlign="center" mb={2}>
         <Typography variant="h6" color="white">
           Video Call - {remoteStreams.length + 1} participant{remoteStreams.length !== 0 ? 's' : ''}
@@ -262,7 +299,6 @@ socketRef.current.on("offer", async ({ from, offer }) => {
       </Box>
 
       <Box display="flex" gap={2} justifyContent="center" flexWrap="wrap">
-        {/* Local video */}
         <Box position="relative">
           <video
             ref={localVideoRef}
@@ -295,7 +331,6 @@ socketRef.current.on("offer", async ({ from, offer }) => {
           </Typography>
         </Box>
 
-        {/* Remote videos */}
         {remoteStreams.map(({ socketId, stream }) => (
           <Box key={socketId} position="relative">
             <video
@@ -311,8 +346,9 @@ socketRef.current.on("offer", async ({ from, offer }) => {
               }}
               ref={videoEl => {
                 if (videoEl && stream) {
-                  console.log("🎬 Setting srcObject for", socketId, "stream tracks:", stream.getTracks().length);
-                  videoEl.srcObject = stream;
+                  if (videoEl.srcObject !== stream) {
+                    videoEl.srcObject = stream;
+                  }
                 }
               }}
               onLoadedMetadata={() => console.log("📺 Video metadata loaded for", socketId)}
