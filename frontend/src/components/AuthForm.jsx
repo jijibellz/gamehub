@@ -11,34 +11,22 @@ export default function AuthForm({ isLogin, onSuccess }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setMessage(""); // reset previous messages
-
-    // Debug: check values
-    console.log("Submitting:", { username, email, password });
+    setMessage("");
 
     try {
       if (isLogin) {
-  const res = await axios.post(ROUTES.LOGIN, { username, password });
-  localStorage.setItem("token", res.data.access_token);
-
-  // Save current user info with all profile data
-  localStorage.setItem(
-    "currentUser",
-    JSON.stringify(res.data.user)
-  );
-
-  setMessage("✅ Login successful!");
-  if (onSuccess) onSuccess();
-}
- else {
-        // REGISTER
+        const res = await axios.post(ROUTES.LOGIN, { username, password });
+        localStorage.setItem("token", res.data.access_token);
+        localStorage.setItem("currentUser", JSON.stringify(res.data.user));
+        setMessage("✅ Login successful!");
+        if (onSuccess) onSuccess();
+      } else {
         await axios.post(ROUTES.REGISTER, { username, email, password });
         setMessage("🎉 Registration successful! You can now login.");
       }
     } catch (err) {
       console.error(err);
       let errorMsg = "❌ Something went wrong";
-
       if (err.response?.data?.detail) {
         const detail = err.response.data.detail;
         if (typeof detail === "string") {
@@ -47,7 +35,6 @@ export default function AuthForm({ isLogin, onSuccess }) {
           errorMsg = `❌ ${detail[0].msg}`;
         }
       }
-
       setMessage(errorMsg);
     }
   };
@@ -55,59 +42,66 @@ export default function AuthForm({ isLogin, onSuccess }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="bg-white p-8 rounded-2xl shadow-lg w-96 space-y-4"
+      className="w-96 p-8 rounded-2xl shadow-xl bg-[#1e1f22] flex flex-col gap-5 border border-[#2f3136]"
     >
-      {/* Username always */}
+      <h2 className="text-center text-2xl font-semibold text-gray-100">
+        {isLogin ? "Welcome Back 👋" : "Create an Account"}
+      </h2>
+
       <input
         type="text"
         placeholder="Username"
         value={username}
         onChange={(e) => setUsername(e.target.value)}
-        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+        className="w-full px-4 py-3 rounded-md bg-[#2b2d31] text-gray-200 placeholder-gray-400 border border-transparent focus:outline-none focus:ring-2 focus:ring-[#5865f2] transition"
         required
       />
 
-      {/* Email only on register */}
       {!isLogin && (
         <input
           type="email"
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+          className="w-full px-4 py-3 rounded-md bg-[#2b2d31] text-gray-200 placeholder-gray-400 border border-transparent focus:outline-none focus:ring-2 focus:ring-[#5865f2] transition"
           required
         />
       )}
 
-      {/* Password always */}
       <input
         type="password"
         placeholder="Password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+        className="w-full px-4 py-3 rounded-md bg-[#2b2d31] text-gray-200 placeholder-gray-400 border border-transparent focus:outline-none focus:ring-2 focus:ring-[#5865f2] transition"
         required
       />
 
       <button
         type="submit"
-        className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition"
+        className="w-full py-3 rounded-md bg-[#5865f2] text-white font-semibold hover:bg-[#4752c4] transition"
       >
         {isLogin ? "Login" : "Register"}
       </button>
 
-      {/* Message */}
       {message && (
         <p
-          className={`mt-3 text-center ${
+          className={`text-center text-sm ${
             message.startsWith("✅") || message.startsWith("🎉")
-              ? "text-green-600"
-              : "text-red-500"
+              ? "text-green-400"
+              : "text-red-400"
           }`}
         >
           {message}
         </p>
       )}
+
+      <p className="text-center text-gray-400 text-xs">
+        {isLogin ? "Need an account?" : "Already have one?"}{" "}
+        <span className="text-[#5865f2] cursor-pointer hover:underline">
+          {isLogin ? "Register" : "Login"}
+        </span>
+      </p>
     </form>
   );
 }
