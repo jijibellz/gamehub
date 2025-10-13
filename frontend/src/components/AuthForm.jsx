@@ -27,6 +27,7 @@ export default function AuthForm({ isLogin, onSuccess }) {
     } catch (err) {
       console.error(err);
       let errorMsg = "❌ Something went wrong";
+
       if (err.response?.data?.detail) {
         const detail = err.response.data.detail;
         if (typeof detail === "string") {
@@ -42,48 +43,59 @@ export default function AuthForm({ isLogin, onSuccess }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="w-96 p-8 rounded-2xl shadow-xl bg-[#1e1f22] flex flex-col gap-5 border border-[#2f3136]"
+      className="w-[380px] p-8 rounded-2xl bg-[#1f1f23] shadow-2xl border border-[#2f3136] flex flex-col gap-5 transition-all duration-300"
     >
-      <h2 className="text-center text-2xl font-semibold text-gray-100">
-        {isLogin ? "Welcome Back 👋" : "Create an Account"}
+      <h2 className="text-center text-2xl font-semibold text-gray-100 tracking-tight">
+        {isLogin ? "Log In" : "Sign Up"}
       </h2>
 
-      <input
-        type="text"
-        placeholder="Username"
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-        className="w-full px-4 py-3 rounded-md bg-[#2b2d31] text-gray-200 placeholder-gray-400 border border-transparent focus:outline-none focus:ring-2 focus:ring-[#5865f2] transition"
-        required
-      />
-
-      {!isLogin && (
+      {/* Username */}
+      <div>
         <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          type="text"
+          placeholder="Username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
           className="w-full px-4 py-3 rounded-md bg-[#2b2d31] text-gray-200 placeholder-gray-400 border border-transparent focus:outline-none focus:ring-2 focus:ring-[#5865f2] transition"
           required
         />
+      </div>
+
+      {/* Email only when registering */}
+      {!isLogin && (
+        <div>
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full px-4 py-3 rounded-md bg-[#2b2d31] text-gray-200 placeholder-gray-400 border border-transparent focus:outline-none focus:ring-2 focus:ring-[#5865f2] transition"
+            required
+          />
+        </div>
       )}
 
-      <input
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        className="w-full px-4 py-3 rounded-md bg-[#2b2d31] text-gray-200 placeholder-gray-400 border border-transparent focus:outline-none focus:ring-2 focus:ring-[#5865f2] transition"
-        required
-      />
+      {/* Password */}
+      <div>
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="w-full px-4 py-3 rounded-md bg-[#2b2d31] text-gray-200 placeholder-gray-400 border border-transparent focus:outline-none focus:ring-2 focus:ring-[#5865f2] transition"
+          required
+        />
+      </div>
 
+      {/* Button */}
       <button
         type="submit"
-        className="w-full py-3 rounded-md bg-[#5865f2] text-white font-semibold hover:bg-[#4752c4] transition"
+        className="w-full py-3 rounded-md bg-[#5865f2] text-white font-semibold hover:bg-[#4752c4] active:scale-[0.98] transition-all duration-150"
       >
         {isLogin ? "Login" : "Register"}
       </button>
 
+      {/* Status Message */}
       {message && (
         <p
           className={`text-center text-sm ${
@@ -95,13 +107,6 @@ export default function AuthForm({ isLogin, onSuccess }) {
           {message}
         </p>
       )}
-
-      <p className="text-center text-gray-400 text-xs">
-        {isLogin ? "Need an account?" : "Already have one?"}{" "}
-        <span className="text-[#5865f2] cursor-pointer hover:underline">
-          {isLogin ? "Register" : "Login"}
-        </span>
-      </p>
     </form>
   );
 }
