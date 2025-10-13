@@ -39,13 +39,19 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
         // 3️⃣ listen for other users joining
         socketRef.current.on("user-joined", ({ userId, socketId }) => {
           console.log("🆕 New user joined:", userId, "socketId:", socketId);
-          
+
           // Don't connect to yourself
           if (socketId === socketRef.current.id) {
             console.log("⚠️ Ignoring self-connection");
             return;
           }
-          
+
+          // Check if we already have a connection with this user
+          if (peerConnections[socketId]) {
+            console.log("⚠️ Already have connection with", socketId);
+            return;
+          }
+
           const pc = createPeerConnection(socketId, localStream);
           setPeerConnections(prev => ({ ...prev, [socketId]: pc }));
 
@@ -62,6 +68,13 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
         // 4️⃣ handle incoming offer
         socketRef.current.on("offer", async ({ from, offer }) => {
           console.log("📥 Received offer from", from);
+
+          // Check if we already have a connection with this user
+          if (peerConnections[from]) {
+            console.log("⚠️ Already have connection with", from, "- ignoring duplicate offer");
+            return;
+          }
+
           const pc = createPeerConnection(from, localStream);
           setPeerConnections(prev => ({ ...prev, [from]: pc }));
 
@@ -69,37 +82,44 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           console.log("📤 Sending answer to", from);
-          socketRef.current.emit("answer", { to: from, answer, from: socketRef.current.id });
         });
 
         // 5️⃣ handle incoming answer
         socketRef.current.on("answer", async ({ from, answer }) => {
           console.log("📥 Received answer from", from);
-          const pc = peerConnections[from];
-          if (pc) {
-            await pc.setRemoteDescription(answer);
-          } else {
-            console.warn("⚠️ No peer connection found for", from);
-          }
+          setPeerConnections(prev => {
+            const pc = prev[from];
+            if (pc) {
+              pc.setRemoteDescription(answer).catch(err =>
+                console.error("Error setting remote description:", err)
+              );
+            } else {
+              console.warn("⚠️ No peer connection found for", from);
+            }
+            return prev;
+          });
         });
 
         // 6️⃣ handle ICE candidates
         socketRef.current.on("ice-candidate", ({ from, candidate }) => {
           console.log("🧊 Received ICE candidate from", from);
-          const pc = peerConnections[from];
-          if (pc && candidate) {
-            pc.addIceCandidate(candidate).catch(err => 
-              console.error("Error adding ICE candidate:", err)
-            );
-          }
+          setPeerConnections(prev => {
+            const pc = prev[from];
+            if (pc && candidate) {
+              pc.addIceCandidate(candidate).catch(err =>
+                console.error("Error adding ICE candidate:", err)
+              );
+            }
+            return prev;
+          });
         });
 
         // 7️⃣ handle user leaving
         socketRef.current.on("user-left", ({ socketId }) => {
           console.log("User left:", socketId);
-          const pc = peerConnections[socketId];
-          if (pc) pc.close();
           setPeerConnections(prev => {
+            const pc = prev[socketId];
+            if (pc) pc.close();
             const newPeers = { ...prev };
             delete newPeers[socketId];
             return newPeers;
