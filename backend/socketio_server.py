@@ -21,9 +21,162 @@ sio = socketio.AsyncServer(
 # Format: {socket_id: {"serverName": str, "channelName": str}}
 active_connections: Dict[str, dict] = {}
 
-# Track channel rooms
-# Format: {f"{serverName}:{channelName}": Set[socket_id]}
-channel_rooms: Dict[str, Set[str]] = {}
+# Track video call rooms
+# Format: {roomId: Set[socket_id]}
+video_call_rooms: Dict[str, Set[str]] = {}
+
+
+@sio.event
+async def join_room(sid, data):
+    """
+    Handle user joining a video call room
+    Expected data: {"roomId": str, "userId": str}
+    """
+    try:
+        room_id = data.get("roomId")
+        user_id = data.get("userId")
+
+        if not room_id or not user_id:
+            print(f"❌ Invalid join_room data from {sid}: {data}")
+            return
+
+        # Leave previous room if any
+        for room, participants in video_call_rooms.items():
+            if sid in participants:
+                await sio.leave_room(sid, room)
+                participants.discard(sid)
+                if not participants:
+                    del video_call_rooms[room]
+                break
+
+        # Join new room
+        await sio.enter_room(sid, room_id)
+
+        if room_id not in video_call_rooms:
+            video_call_rooms[room_id] = set()
+        video_call_rooms[room_id].add(sid)
+
+        print(f"📹 {user_id} ({sid}) joined video room {room_id}")
+
+        # Notify others in the room that a new user joined
+        await sio.emit("user-joined", {
+            "userId": user_id,
+            "socketId": sid
+        }, room=room_id, skip_sid=sid)
+
+    except Exception as e:
+        print(f"❌ Error in join_room: {e}")
+
+
+@sio.event
+async def offer(sid, data):
+    """
+    Handle WebRTC offer
+    Expected data: {"to": str, "offer": dict, "from": str}
+    """
+    try:
+        to_socket = data.get("to")
+        offer = data.get("offer")
+        from_socket = data.get("from")
+
+        if not to_socket or not offer or not from_socket:
+            print(f"❌ Invalid offer data from {sid}: {data}")
+            return
+
+        print(f"📤 Forwarding offer from {from_socket} to {to_socket}")
+
+        # Forward offer to specific user
+        await sio.emit("offer", {
+            "from": from_socket,
+            "offer": offer
+        }, to=to_socket)
+
+    except Exception as e:
+        print(f"❌ Error in offer: {e}")
+
+
+@sio.event
+async def answer(sid, data):
+    """
+    Handle WebRTC answer
+    Expected data: {"to": str, "answer": dict, "from": str}
+    """
+    try:
+        to_socket = data.get("to")
+        answer = data.get("answer")
+        from_socket = data.get("from")
+
+        if not to_socket or not answer or not from_socket:
+            print(f"❌ Invalid answer data from {sid}: {data}")
+            return
+
+        print(f"📤 Forwarding answer from {from_socket} to {to_socket}")
+
+        # Forward answer to specific user
+        await sio.emit("answer", {
+            "from": from_socket,
+            "answer": answer
+        }, to=to_socket)
+
+    except Exception as e:
+        print(f"❌ Error in answer: {e}")
+
+
+@sio.event
+async def ice_candidate(sid, data):
+    """
+    Handle ICE candidates
+    Expected data: {"to": str, "candidate": dict, "from": str}
+    """
+    try:
+        to_socket = data.get("to")
+        candidate = data.get("candidate")
+        from_socket = data.get("from")
+
+        if not to_socket or not candidate or not from_socket:
+            print(f"❌ Invalid ice-candidate data from {sid}: {data}")
+            return
+
+        print(f"🧊 Forwarding ICE candidate from {from_socket} to {to_socket}")
+
+        # Forward ICE candidate to specific user
+        await sio.emit("ice-candidate", {
+            "from": from_socket,
+            "candidate": candidate
+        }, to=to_socket)
+
+    except Exception as e:
+        print(f"❌ Error in ice-candidate: {e}")
+
+
+@sio.event
+async def leave_room(sid, data):
+    """
+    Handle user leaving a video call room
+    Expected data: {"roomId": str}
+    """
+    try:
+        room_id = data.get("roomId")
+
+        if not room_id:
+            return
+
+        await sio.leave_room(sid, room_id)
+
+        if room_id in video_call_rooms:
+            video_call_rooms[room_id].discard(sid)
+            if not video_call_rooms[room_id]:
+                del video_call_rooms[room_id]
+
+        print(f"📹 User {sid} left video room {room_id}")
+
+        # Notify others that user left
+        await sio.emit("user-left", {
+            "socketId": sid
+        }, room=room_id)
+
+    except Exception as e:
+        print(f"❌ Error in leave_room: {e}")
 
 
 @sio.event
@@ -37,18 +190,31 @@ async def connect(sid, environ):
 async def disconnect(sid):
     """Handle client disconnection"""
     print(f"🔌 Client disconnected: {sid}")
-    
+
     # Remove from active connections and rooms
     if sid in active_connections:
         conn_info = active_connections[sid]
         room_key = f"{conn_info['serverName']}:{conn_info['channelName']}"
-        
+
         if room_key in channel_rooms:
             channel_rooms[room_key].discard(sid)
             if not channel_rooms[room_key]:
                 del channel_rooms[room_key]
-        
+
         del active_connections[sid]
+
+    # Remove from video call rooms
+    for room_id, participants in list(video_call_rooms.items()):
+        if sid in participants:
+            participants.discard(sid)
+            if not participants:
+                del video_call_rooms[room_id]
+            else:
+                # Notify others that user left
+                await sio.emit("user-left", {
+                    "socketId": sid
+                }, room=room_id)
+            break
 
 
 @sio.event

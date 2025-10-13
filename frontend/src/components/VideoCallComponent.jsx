@@ -2,8 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Box, Button } from "@mui/material";
 import { io } from "socket.io-client";
-
-const SIGNALING_SERVER_URL = "http://localhost:5000"; // your Node signaling server
+import { SOCKET_SERVER_URL } from "../api/routes";
 
 export default function VideoCallComponent({ serverName, channelName, currentUser, onLeaveCall }) {
   const localVideoRef = useRef(null);
@@ -30,7 +29,7 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
         if (localVideoRef.current) localVideoRef.current.srcObject = localStream;
 
         // 2️⃣ connect to signaling server
-        socketRef.current = io(SIGNALING_SERVER_URL);
+        socketRef.current = io(SOCKET_SERVER_URL);
 
         socketRef.current.emit("join-room", {
           roomId: channelName,
