@@ -22,10 +22,24 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
   const MAX_PARTICIPANTS = 20;
   const getVideoSize = (participantCount) => {
     // Dynamic sizing based on participant count
-    if (participantCount <= 4) return { width: 300, height: 300 };
-    if (participantCount <= 9) return { width: 250, height: 250 };
-    if (participantCount <= 16) return { width: 200, height: 200 };
-    return { width: 150, height: 150 }; // For 17-20 participants
+    if (participantCount <= 1) return { width: 400, height: 300 };
+    if (participantCount <= 4) return { width: 320, height: 240 };
+    if (participantCount <= 6) return { width: 280, height: 210 };
+    if (participantCount <= 9) return { width: 240, height: 180 };
+    if (participantCount <= 12) return { width: 200, height: 150 };
+    if (participantCount <= 16) return { width: 170, height: 130 };
+    return { width: 140, height: 105 }; // For 17-20 participants
+  };
+
+  const getGridLayout = (participantCount) => {
+    if (participantCount <= 1) return { cols: 1, rows: 1 };
+    if (participantCount <= 2) return { cols: 2, rows: 1 };
+    if (participantCount <= 4) return { cols: 2, rows: 2 };
+    if (participantCount <= 6) return { cols: 3, rows: 2 };
+    if (participantCount <= 9) return { cols: 3, rows: 3 };
+    if (participantCount <= 12) return { cols: 4, rows: 3 };
+    if (participantCount <= 16) return { cols: 4, rows: 4 };
+    return { cols: 5, rows: 4 }; // For 17-20 participants
   };
 
   // helper to update both ref + state
@@ -306,17 +320,18 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
 
   const currentParticipantCount = remoteStreams.length + 1;
   const videoSize = getVideoSize(currentParticipantCount);
+  const gridLayout = getGridLayout(currentParticipantCount);
 
   return (
     <Box sx={{ position: "relative", height: "100%", display: "flex", flexDirection: "column" }}>
-      {/* Fixed Leave Call Button */}
+      {/* Fixed Leave Call Button at Bottom */}
       <Fab
         color="error"
         aria-label="leave call"
         onClick={handleLeaveCall}
         sx={{
-          position: "fixed",
-          top: 20,
+          position: "absolute",
+          bottom: 20,
           right: 20,
           zIndex: 1000,
           boxShadow: "0 4px 20px rgba(244, 67, 54, 0.3)",
@@ -347,25 +362,27 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
         sx={{
           flex: 1,
           display: "grid",
-          gridTemplateColumns: `repeat(auto-fit, ${videoSize.width}px)`,
-          gap: 2,
+          gridTemplateColumns: `repeat(${gridLayout.cols}, 1fr)`,
+          gridTemplateRows: `repeat(${gridLayout.rows}, 1fr)`,
+          gap: 1.5,
           justifyContent: "center",
           alignContent: "center",
           p: 2,
           maxHeight: "calc(100vh - 200px)",
           overflow: "auto",
+          minHeight: 0,
         }}
       >
         {/* Local Video */}
-        <Box position="relative">
+        <Box position="relative" sx={{ width: '100%', height: '100%' }}>
           <video
             ref={localVideoRef}
             autoPlay
             muted
             playsInline
             style={{
-              width: videoSize.width,
-              height: videoSize.height,
+              width: '100%',
+              height: '100%',
               borderRadius: 8,
               backgroundColor: "#000",
               objectFit: "cover",
@@ -383,6 +400,7 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
               px: 1,
               py: 0.5,
               borderRadius: 1,
+              fontSize: '0.75rem',
             }}
           >
             You
@@ -391,13 +409,13 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
 
         {/* Remote Videos */}
         {remoteStreams.map(({ socketId, stream }) => (
-          <Box key={socketId} position="relative">
+          <Box key={socketId} position="relative" sx={{ width: '100%', height: '100%' }}>
             <video
               autoPlay
               playsInline
               style={{
-                width: videoSize.width,
-                height: videoSize.height,
+                width: '100%',
+                height: '100%',
                 borderRadius: 8,
                 backgroundColor: "#000",
                 objectFit: "cover",
@@ -425,6 +443,7 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
                 px: 1,
                 py: 0.5,
                 borderRadius: 1,
+                fontSize: '0.75rem',
               }}
             >
               User {socketId.slice(-4)}
