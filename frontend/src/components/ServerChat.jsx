@@ -71,7 +71,9 @@ export default function ServerChat({ serverName, channelName = "general", curren
     socketRef.current = io(SOCKET_SERVER_URL);
 
     // Join the channel room
-    socketRef.current.emit("join-channel", { serverName, channelName });
+    // Join the channel
+    socketRef.current.emit("join_channel", { serverName, channelName });
+
 
     // Listen for new messages
     socketRef.current.on("message-received", (message) => {
@@ -97,7 +99,7 @@ export default function ServerChat({ serverName, channelName = "general", curren
     // Cleanup on unmount or channel change
     return () => {
       if (socketRef.current) {
-        socketRef.current.emit("leave-channel", { serverName, channelName });
+        socketRef.current.emit("leave_channel", { serverName, channelName });
         socketRef.current.disconnect();
       }
     };
