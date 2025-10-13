@@ -96,7 +96,7 @@ export default function ServerChat({ serverName, channelName = "general", curren
     socket.emit("join_channel", { serverName, channelName });
 
     // Listen for new messages
-    socket.on("message-received", (message) => {
+    socket.on("message_received", (message) => {
       console.log("📩 New message received:", message);
       setMessages((prev) => {
         // Avoid duplicates by checking if message already exists

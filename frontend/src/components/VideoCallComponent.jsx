@@ -70,7 +70,7 @@ export default function VideoCallComponent({
           userId: currentUser.username,
         });
 
-        socketRef.current.on("user-joined", ({ userId, socketId }) => {
+        socketRef.current.on("user_joined", ({ userId, socketId }) => {
           if (socketId === socketRef.current.id) return;
           const pc = createPeerConnection(socketId, localStream);
           peerConnectionsRef.current = {
@@ -109,12 +109,12 @@ export default function VideoCallComponent({
           if (pc) await pc.setRemoteDescription(answer);
         });
 
-        socketRef.current.on("ice-candidate", async ({ from, candidate }) => {
+        socketRef.current.on("ice_candidate", async ({ from, candidate }) => {
           const pc = peerConnectionsRef.current[from];
           if (pc && candidate) await pc.addIceCandidate(candidate);
         });
 
-        socketRef.current.on("user-left", ({ socketId }) => {
+        socketRef.current.on("user_left", ({ socketId }) => {
           const pc = peerConnectionsRef.current[socketId];
           if (pc) pc.close();
           delete peerConnectionsRef.current[socketId];
