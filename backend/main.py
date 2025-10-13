@@ -93,6 +93,10 @@ def on_startup():
 def root():
     return {"message": "GameHub backend running 🎮"}
 
+# ✅ Add a simple Socket.IO test endpoint
+@fastapi_app.get("/socket.io/test")
+def socketio_test():
+    return {"message": "Socket.IO server is running", "status": "ok"}
 
 # ✅ Wrap FastAPI with Socket.IO
 # This must be the *final* app that Render runs
@@ -100,8 +104,3 @@ app = create_socketio_app(fastapi_app)
 
 # ✅ Expose the Socket.IO app for uvicorn
 socket_app = app
-
-# ✅ Add a simple Socket.IO test endpoint
-@app.get("/socket.io/test")
-def socketio_test():
-    return {"message": "Socket.IO server is running", "status": "ok"}
