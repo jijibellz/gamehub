@@ -1,3 +1,21 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+  }
+
+  #root {
+    height: 100%;
+    width: 100%;
+  }
+}

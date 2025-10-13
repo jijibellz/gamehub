@@ -40,85 +40,82 @@ export default function AuthForm({ isLogin, onSuccess }) {
   };
 
   return (
-  <form
-    onSubmit={handleSubmit}
-    className="auth-form bg-[#313338] text-white p-8 rounded-lg shadow-2xl border border-[#3f4147]"
-  >
-    <h2 className="text-2xl font-bold text-center mb-1">
-      {isLogin ? "Welcome back!" : "Create an account"}
-    </h2>
-    <p className="text-gray-400 text-center mb-6 text-sm">
-      {isLogin
-        ? "We’re so excited to see you again!"
-        : "Join us and start connecting!"}
-    </p>
+    <form onSubmit={handleSubmit} className="auth-form">
+      <h2>
+        {isLogin ? "Welcome back!" : "Create an account"}
+      </h2>
+      <p>
+        {isLogin
+          ? "We're so excited to see you again!"
+          : "Join us and start connecting!"}
+      </p>
 
-    {/* Left align form fields */}
-    <div className="form-fields flex flex-col space-y-4 items-start">
-      {/* Username */}
-      <div>
-        <label className="block text-xs uppercase text-gray-400 mb-1">
-          Username
-        </label>
-        <input
-          type="text"
-          placeholder="Enter username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          required
-          className="auth-input"
-        />
-      </div>
-
-      {/* Email (only register) */}
-      {!isLogin && (
+      {/* Left align form fields */}
+      <div className="form-fields flex flex-col space-y-4 items-start">
+        {/* Username */}
         <div>
-          <label className="block text-xs uppercase text-gray-400 mb-1">
-            Email
+          <label>
+            Username
           </label>
           <input
-            type="email"
-            placeholder="Enter email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            type="text"
+            placeholder="Enter username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             required
             className="auth-input"
           />
         </div>
-      )}
 
-      {/* Password */}
-      <div>
-        <label className="block text-xs uppercase text-gray-400 mb-1">
-          Password
-        </label>
-        <input
-          type="password"
-          placeholder="••••••••"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          className="auth-input"
-        />
+        {/* Email (only register) */}
+        {!isLogin && (
+          <div>
+            <label>
+              Email
+            </label>
+            <input
+              type="email"
+              placeholder="Enter email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="auth-input"
+            />
+          </div>
+        )}
+
+        {/* Password */}
+        <div>
+          <label>
+            Password
+          </label>
+          <input
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            className="auth-input"
+          />
+        </div>
       </div>
-    </div>
 
-    {/* Add a lil gap from the password */}
-    <button type="submit" className="submit-btn mt-5">
-      {isLogin ? "Login" : "Register"}
-    </button>
+      {/* Add a lil gap from the password */}
+      <button type="submit" className="submit-btn">
+        {isLogin ? "Login" : "Register"}
+      </button>
 
-    {message && (
-      <p
-        className={`mt-3 text-center text-sm ${
-          message.startsWith("✅") || message.startsWith("🎉")
-            ? "text-green-400"
-            : "text-red-400"
-        }`}
-      >
-        {message}
-      </p>
-    )}
-  </form>
-);
+      {message && (
+        <p
+          className={`mt-3 text-center text-sm ${
+            message.startsWith("✅") || message.startsWith("🎉")
+              ? "text-green-400"
+              : "text-red-400"
+          }`}
+        >
+          {message}
+        </p>
+      )}
+    </form>
+  );
 }

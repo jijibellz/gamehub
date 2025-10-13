@@ -153,8 +153,8 @@ export default function RightSidebar() {
     return (
       <Box
         flex="1"
-        minWidth="250px"
-        maxWidth="350px"
+        minWidth="260px"
+        maxWidth="260px"
         bgcolor="#0f1113"
         p={3}
         display="flex"
@@ -174,8 +174,8 @@ export default function RightSidebar() {
     <>
       <Box
         flex="1"
-        minWidth="235px"
-        
+        minWidth="260px"
+        maxWidth="260px"
         bgcolor="#0f1113"
         p={3}
         display="flex"

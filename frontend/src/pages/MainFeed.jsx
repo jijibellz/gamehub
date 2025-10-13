@@ -33,7 +33,7 @@ export default function MainFeed() {
           height: "100%", // fill vertical space
         }}
       >
-        <LeftSidebar style={{ flex: 1, width: "100%" }} />
+        <LeftSidebar />
       </Box>
 
       {/* MAIN FEED */}
@@ -68,7 +68,7 @@ export default function MainFeed() {
           height: "100%", // fill vertical space
         }}
       >
-        <RightSidebar style={{ flex: 1, width: "100%" }} />
+        <RightSidebar />
       </Box>
     </Box>
   );
