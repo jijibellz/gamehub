@@ -5,73 +5,46 @@ import CallEndIcon from "@mui/icons-material/CallEnd";
 import { io } from "socket.io-client";
 import { SOCKET_SERVER_URL } from "../api/routes";
 
-export default function VideoCallComponent({ serverName, channelName, currentUser, onLeaveCall, onRoomFull }) {
+export default function VideoCallComponent({
+  serverName,
+  channelName,
+  currentUser,
+  onLeaveCall,
+  onRoomFull,
+}) {
   const localVideoRef = useRef(null);
-
-  // visible state
-  const [remoteStreams, setRemoteStreams] = useState([]); // [{ socketId, stream }]
+  const [remoteStreams, setRemoteStreams] = useState([]);
   const [stream, setStream] = useState(null);
   const [isRoomFull, setIsRoomFull] = useState(false);
 
-  // refs for mutable values used in callbacks
   const socketRef = useRef(null);
-  const peerConnectionsRef = useRef({}); // { socketId: RTCPeerConnection }
-  const remoteStreamsRef = useRef([]); // mirror of remoteStreams to avoid closure issues
+  const peerConnectionsRef = useRef({});
+  const remoteStreamsRef = useRef([]);
 
-  // Constants
   const MAX_PARTICIPANTS = 20;
-  const getVideoSize = (participantCount) => {
-    // Much smaller squares that fit in panel without scrolling
-    if (participantCount <= 1) return { size: 200 };
-    if (participantCount <= 2) return { size: 180 };
-    if (participantCount <= 4) return { size: 150 };
-    if (participantCount <= 6) return { size: 130 };
-    if (participantCount <= 9) return { size: 110 };
-    if (participantCount <= 12) return { size: 100 };
-    if (participantCount <= 16) return { size: 90 };
-    return { size: 80 }; // For 17-20 participants
-  };
 
-  const getGridLayout = (participantCount) => {
-    if (participantCount <= 1) return { cols: 1, rows: 1 };
-    if (participantCount <= 2) return { cols: 2, rows: 1 };
-    if (participantCount <= 4) return { cols: 2, rows: 2 };
-    if (participantCount <= 6) return { cols: 3, rows: 2 };
-    if (participantCount <= 9) return { cols: 3, rows: 3 };
-    if (participantCount <= 12) return { cols: 4, rows: 3 };
-    if (participantCount <= 16) return { cols: 4, rows: 4 };
-    return { cols: 5, rows: 4 }; // For 17-20 participants
-  };
-
-  // helper to update both ref + state
   const addOrUpdateRemoteStream = (socketId, remoteStream) => {
-    const idx = remoteStreamsRef.current.findIndex(s => s.socketId === socketId);
-    if (idx >= 0) {
-      const updated = [...remoteStreamsRef.current];
-      updated[idx] = { socketId, stream: remoteStream };
-      remoteStreamsRef.current = updated;
-      setRemoteStreams(updated);
-    } else {
-      const updated = [...remoteStreamsRef.current, { socketId, stream: remoteStream }];
-      remoteStreamsRef.current = updated;
-      setRemoteStreams(updated);
-
-      // Check if room is now full
-      if (updated.length >= MAX_PARTICIPANTS) {
-        setIsRoomFull(true);
-      }
-    }
+    const idx = remoteStreamsRef.current.findIndex(
+      (s) => s.socketId === socketId
+    );
+    const updated =
+      idx >= 0
+        ? [
+            ...remoteStreamsRef.current.slice(0, idx),
+            { socketId, stream: remoteStream },
+            ...remoteStreamsRef.current.slice(idx + 1),
+          ]
+        : [...remoteStreamsRef.current, { socketId, stream: remoteStream }];
+    remoteStreamsRef.current = updated;
+    setRemoteStreams(updated);
   };
 
   const removeRemoteStream = (socketId) => {
-    const updated = remoteStreamsRef.current.filter(s => s.socketId !== socketId);
+    const updated = remoteStreamsRef.current.filter(
+      (s) => s.socketId !== socketId
+    );
     remoteStreamsRef.current = updated;
     setRemoteStreams(updated);
-
-    // Check if room is no longer full
-    if (updated.length < MAX_PARTICIPANTS) {
-      setIsRoomFull(false);
-    }
   };
 
   useEffect(() => {
@@ -80,146 +53,75 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
 
     const initCall = async () => {
       try {
-        if (!currentUser?.username) {
-          console.error("Cannot join video call: missing currentUser.username");
-          return;
-        }
+        if (!currentUser?.username) return;
 
-        // get local media
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
         if (!mounted) return;
         setStream(localStream);
-        if (localVideoRef.current) localVideoRef.current.srcObject = localStream;
+        if (localVideoRef.current)
+          localVideoRef.current.srcObject = localStream;
 
-        // connect to signaling server
-        socketRef.current = io(SOCKET_SERVER_URL, {
-          transports: ["websocket"],
-        });
-
-        // Emit join_room (server expects join_room)
+        socketRef.current = io(SOCKET_SERVER_URL, { transports: ["websocket"] });
         socketRef.current.emit("join_room", {
           roomId: channelName,
           userId: currentUser.username,
         });
 
-        // When a new user joins the room (other clients receive this)
         socketRef.current.on("user-joined", ({ userId, socketId }) => {
-          console.log("🆕 New user joined:", userId, socketId);
-
-          // don't connect to self
           if (socketId === socketRef.current.id) return;
-
-          // if already have pc skip
-          if (peerConnectionsRef.current[socketId]) {
-            console.log("Already have PC for", socketId);
-            return;
-          }
-
-          // create pc as existing participant (we will be the caller to the newcomer)
           const pc = createPeerConnection(socketId, localStream);
-
-          peerConnectionsRef.current = { ...peerConnectionsRef.current, [socketId]: pc };
-
-          // create offer and send to the newcomer
+          peerConnectionsRef.current = {
+            ...peerConnectionsRef.current,
+            [socketId]: pc,
+          };
           (async () => {
-            try {
-              const offer = await pc.createOffer();
-              await pc.setLocalDescription(offer);
-              socketRef.current.emit("offer", {
-                to: socketId,
-                offer,
-                from: socketRef.current.id,
-              });
-              console.log("📤 Offer sent to", socketId);
-            } catch (err) {
-              console.error("Error creating/sending offer:", err);
-            }
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            socketRef.current.emit("offer", {
+              to: socketId,
+              offer,
+              from: socketRef.current.id,
+            });
           })();
         });
 
-        // Handle incoming offer (we are callee)
         socketRef.current.on("offer", async ({ from, offer }) => {
-          console.log("📥 Received offer from", from);
-
-          // If pc already exists, ignore duplicate (or optionally replace)
-          if (peerConnectionsRef.current[from]) {
-            console.log("Duplicate offer: PC already exists for", from);
-            return;
-          }
-
           const pc = createPeerConnection(from, localStream);
-          peerConnectionsRef.current = { ...peerConnectionsRef.current, [from]: pc };
-
-          try {
-            await pc.setRemoteDescription(offer);
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-
-            // send answer back (server expects 'answer' event)
-            socketRef.current.emit("answer", {
-              to: from,
-              answer,
-              from: socketRef.current.id,
-            });
-            console.log("📤 Answer sent to", from);
-          } catch (err) {
-            console.error("Error handling offer from", from, err);
-          }
+          peerConnectionsRef.current = {
+            ...peerConnectionsRef.current,
+            [from]: pc,
+          };
+          await pc.setRemoteDescription(offer);
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          socketRef.current.emit("answer", {
+            to: from,
+            answer,
+            from: socketRef.current.id,
+          });
         });
 
-        // Handle incoming answer (caller receives this)
         socketRef.current.on("answer", async ({ from, answer }) => {
-          console.log("📥 Received answer from", from);
           const pc = peerConnectionsRef.current[from];
-          if (!pc) {
-            console.warn("No PC found for answer from", from);
-            return;
-          }
-          try {
-            await pc.setRemoteDescription(answer);
-          } catch (err) {
-            console.error("Error setting remote description for answer:", err);
-          }
+          if (pc) await pc.setRemoteDescription(answer);
         });
 
-        // Server forwards ICE as event name "ice-candidate" (hyphen) — we listen for that
         socketRef.current.on("ice-candidate", async ({ from, candidate }) => {
-          // sanity
-          if (!candidate || !from) return;
           const pc = peerConnectionsRef.current[from];
-          if (!pc) {
-            console.warn("No PC when receiving candidate from", from);
-            return;
-          }
-          try {
-            await pc.addIceCandidate(candidate);
-          } catch (err) {
-            console.error("Error adding ICE candidate:", err);
-          }
+          if (pc && candidate) await pc.addIceCandidate(candidate);
         });
 
-        // When someone leaves
         socketRef.current.on("user-left", ({ socketId }) => {
-          console.log("User left:", socketId);
           const pc = peerConnectionsRef.current[socketId];
-          if (pc) {
-            try { pc.close(); } catch (e) {}
-            const copy = { ...peerConnectionsRef.current };
-            delete copy[socketId];
-            peerConnectionsRef.current = copy;
-          }
+          if (pc) pc.close();
+          delete peerConnectionsRef.current[socketId];
           removeRemoteStream(socketId);
         });
-
-        // Handle room full event
-        socketRef.current.on("room-full", ({ roomId }) => {
-          console.log("❌ Room is full:", roomId);
-          setIsRoomFull(true);
-          if (onRoomFull) onRoomFull();
-          if (onLeaveCall) onLeaveCall();
-        });
       } catch (err) {
-        console.error("Error in initCall:", err);
+        console.error(err);
       }
     };
 
@@ -227,231 +129,149 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
 
     return () => {
       mounted = false;
-      // cleanup
       try {
-        if (socketRef.current) {
-          socketRef.current.emit("leave_room", { roomId: channelName });
-          socketRef.current.disconnect();
-        }
-      } catch (e) {}
-      if (localStream) {
-        localStream.getTracks().forEach(t => t.stop());
-      }
-      // close all peer connections
-      Object.values(peerConnectionsRef.current).forEach(pc => {
-        try { pc.close(); } catch (e) {}
-      });
+        socketRef.current?.emit("leave_room", { roomId: channelName });
+        socketRef.current?.disconnect();
+      } catch {}
+      localStream?.getTracks().forEach((t) => t.stop());
+      Object.values(peerConnectionsRef.current).forEach((pc) => pc.close());
       peerConnectionsRef.current = {};
       remoteStreamsRef.current = [];
       setRemoteStreams([]);
-      setIsRoomFull(false); // Reset room full state on cleanup
     };
   }, []);
 
   function createPeerConnection(remoteSocketId, localStream) {
     const pc = new RTCPeerConnection({
       iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        {
-          urls: 'turn:openrelay.metered.ca:80',
-          username: 'openrelayproject',
-          credential: 'openrelayproject',
-        },
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
       ],
-      iceCandidatePoolSize: 10,
     });
 
-    // add local tracks
-    if (localStream) {
-      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-    }
+    localStream?.getTracks().forEach((track) =>
+      pc.addTrack(track, localStream)
+    );
 
-    // when remote track(s) received
-    pc.ontrack = (event) => {
-      if (!event.streams || event.streams.length === 0) {
-        console.warn("No streams on ontrack for", remoteSocketId);
-        return;
-      }
-      const remoteStream = event.streams[0];
-      addOrUpdateRemoteStream(remoteSocketId, remoteStream);
-      console.log("Received remote stream for", remoteSocketId, "tracks:", remoteStream.getTracks().length);
-    };
+    pc.ontrack = (event) =>
+      addOrUpdateRemoteStream(remoteSocketId, event.streams[0]);
 
-    // send ICE candidates to the other peer
     pc.onicecandidate = (event) => {
-      if (event.candidate) {
+      if (event.candidate)
         socketRef.current.emit("ice_candidate", {
           to: remoteSocketId,
           candidate: event.candidate,
           from: socketRef.current.id,
         });
-      }
-    };
-
-    pc.onconnectionstatechange = () => {
-      console.log(`Connection state (${remoteSocketId}):`, pc.connectionState);
-      if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
-        // optional: try restart or cleanup
-      }
-    };
-
-    pc.oniceconnectionstatechange = () => {
-      console.log(`ICE state (${remoteSocketId}):`, pc.iceConnectionState);
     };
 
     return pc;
   }
 
   const handleLeaveCall = () => {
-    try {
-      if (socketRef.current) socketRef.current.emit("leave_room", { roomId: channelName });
-      if (socketRef.current) socketRef.current.disconnect();
-    } catch (e) {}
-    if (stream) stream.getTracks().forEach(t => t.stop());
-    Object.values(peerConnectionsRef.current).forEach(pc => {
-      try { pc.close(); } catch (e) {}
-    });
+    socketRef.current?.emit("leave_room", { roomId: channelName });
+    socketRef.current?.disconnect();
+    stream?.getTracks().forEach((t) => t.stop());
+    Object.values(peerConnectionsRef.current).forEach((pc) => pc.close());
     peerConnectionsRef.current = {};
     remoteStreamsRef.current = [];
     setRemoteStreams([]);
-    setIsRoomFull(false); // Reset room full state
     if (onLeaveCall) onLeaveCall();
   };
 
-  const currentParticipantCount = remoteStreams.length + 1;
-  const videoSize = getVideoSize(currentParticipantCount);
-  const gridLayout = getGridLayout(currentParticipantCount);
+  const participants = [stream, ...remoteStreams.map((s) => s.stream)].filter(
+    Boolean
+  );
+  const participantCount = participants.length;
 
   return (
-    <Box sx={{ position: "relative", height: "100%", display: "flex", flexDirection: "column" }}>
-      {/* Fixed Leave Call Button at Bottom */}
-      <Fab
-        color="error"
-        aria-label="leave call"
-        onClick={handleLeaveCall}
-        sx={{
-          position: "absolute",
-          bottom: 20,
-          right: 20,
-          zIndex: 1000,
-          boxShadow: "0 4px 20px rgba(244, 67, 54, 0.3)",
-        }}
-      >
-        <CallEndIcon />
-      </Fab>
-
-      {/* Header */}
-      <Box textAlign="center" mb={2} px={2}>
-        <Typography variant="h6" color="white">
-          Video Call - {currentParticipantCount} participant{currentParticipantCount !== 1 ? 's' : ''}
-        </Typography>
-        {remoteStreams.length === 0 && (
-          <Typography variant="body2" color="#888" mt={1}>
-            Waiting for others to join...
-          </Typography>
-        )}
-        {isRoomFull && (
-          <Typography variant="body2" color="#ff6b6b" mt={1}>
-            Room is full (max {MAX_PARTICIPANTS} participants)
-          </Typography>
-        )}
-      </Box>
-
+    <Box
+      sx={{
+        height: "100%",
+        width: "100%",
+        display: "flex",
+        flexDirection: "column",
+        position: "relative",
+        bgcolor: "#111",
+      }}
+    >
       {/* Video Grid */}
       <Box
         sx={{
-          flex: 1,
+          flexGrow: 1,
           display: "grid",
-          gridTemplateColumns: `repeat(${gridLayout.cols}, 1fr)`,
-          gridTemplateRows: `repeat(${gridLayout.rows}, 1fr)`,
+          gridTemplateColumns: `repeat(auto-fit, minmax(${Math.max(
+            200 - participantCount * 5,
+            100
+          )}px, 1fr))`,
           gap: 2,
-          justifyContent: "center",
-          alignContent: "center",
-          p: 3,
-          maxHeight: "calc(100vh - 250px)",
-          maxWidth: "calc(100vw - 100px)",
-          margin: "0 auto",
-          justifySelf: "center",
+          p: 2,
+          overflow: "hidden",
+          placeItems: "center",
         }}
       >
-        {/* Local Video */}
-        <Box position="relative" sx={{ width: '100%', height: '100%', aspectRatio: '1' }}>
+        {stream && (
           <video
             ref={localVideoRef}
             autoPlay
             muted
             playsInline
             style={{
-              width: '100%',
-              height: '100%',
-              borderRadius: 8,
+              width: "100%",
+              height: "100%",
+              borderRadius: 10,
               backgroundColor: "#000",
               objectFit: "cover",
               border: "2px solid #4CAF50",
             }}
           />
-          <Typography
-            variant="caption"
-            sx={{
-              position: "absolute",
-              bottom: 8,
-              left: 8,
-              bgcolor: "rgba(0,0,0,0.7)",
-              color: "white",
-              px: 1,
-              py: 0.5,
-              borderRadius: 1,
-              fontSize: '0.75rem',
-            }}
-          >
-            You
-          </Typography>
-        </Box>
-
-        {/* Remote Videos */}
+        )}
         {remoteStreams.map(({ socketId, stream }) => (
-          <Box key={socketId} position="relative" sx={{ width: '100%', height: '100%', aspectRatio: '1' }}>
-            <video
-              autoPlay
-              playsInline
-              style={{
-                width: '100%',
-                height: '100%',
-                borderRadius: 8,
-                backgroundColor: "#000",
-                objectFit: "cover",
-                border: "2px solid #2196F3",
-              }}
-              ref={videoEl => {
-                if (videoEl && stream) {
-                  if (videoEl.srcObject !== stream) {
-                    videoEl.srcObject = stream;
-                  }
-                }
-              }}
-              onLoadedMetadata={() => console.log("📺 Video metadata loaded for", socketId)}
-              onPlay={() => console.log("▶️ Video playing for", socketId)}
-              onError={(e) => console.error("❌ Video error for", socketId, e)}
-            />
-            <Typography
-              variant="caption"
-              sx={{
-                position: "absolute",
-                bottom: 8,
-                left: 8,
-                bgcolor: "rgba(0,0,0,0.7)",
-                color: "white",
-                px: 1,
-                py: 0.5,
-                borderRadius: 1,
-                fontSize: '0.75rem',
-              }}
-            >
-              User {socketId.slice(-4)}
-            </Typography>
-          </Box>
+          <video
+            key={socketId}
+            autoPlay
+            playsInline
+            style={{
+              width: "100%",
+              height: "100%",
+              borderRadius: 10,
+              backgroundColor: "#000",
+              objectFit: "cover",
+              border: "2px solid #2196F3",
+            }}
+            ref={(el) => {
+              if (el && stream && el.srcObject !== stream)
+                el.srcObject = stream;
+            }}
+          />
         ))}
+      </Box>
+
+      {/* Fixed bottom bar for End Call */}
+      <Box
+        sx={{
+          position: "sticky",
+          bottom: 0,
+          width: "100%",
+          bgcolor: "rgba(0,0,0,0.6)",
+          py: 1,
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <Fab
+          color="error"
+          aria-label="leave call"
+          onClick={handleLeaveCall}
+          sx={{
+            boxShadow: "0 4px 20px rgba(244, 67, 54, 0.4)",
+            transition: "0.2s",
+            "&:hover": { transform: "scale(1.1)" },
+          }}
+        >
+          <CallEndIcon />
+        </Fab>
       </Box>
     </Box>
   );
