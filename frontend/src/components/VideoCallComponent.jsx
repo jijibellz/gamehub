@@ -21,14 +21,15 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
   // Constants
   const MAX_PARTICIPANTS = 20;
   const getVideoSize = (participantCount) => {
-    // Dynamic sizing based on participant count
-    if (participantCount <= 1) return { width: 400, height: 300 };
-    if (participantCount <= 4) return { width: 320, height: 240 };
-    if (participantCount <= 6) return { width: 280, height: 210 };
-    if (participantCount <= 9) return { width: 240, height: 180 };
-    if (participantCount <= 12) return { width: 200, height: 150 };
-    if (participantCount <= 16) return { width: 170, height: 130 };
-    return { width: 140, height: 105 }; // For 17-20 participants
+    // Square sizing that scales down uniformly for all participants
+    if (participantCount <= 1) return { size: 400 };
+    if (participantCount <= 2) return { size: 350 };
+    if (participantCount <= 4) return { size: 300 };
+    if (participantCount <= 6) return { size: 250 };
+    if (participantCount <= 9) return { size: 200 };
+    if (participantCount <= 12) return { size: 180 };
+    if (participantCount <= 16) return { size: 160 };
+    return { size: 140 }; // For 17-20 participants
   };
 
   const getGridLayout = (participantCount) => {
@@ -374,7 +375,7 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
         }}
       >
         {/* Local Video */}
-        <Box position="relative" sx={{ width: '100%', height: '100%' }}>
+        <Box position="relative" sx={{ width: '100%', height: '100%', aspectRatio: '1' }}>
           <video
             ref={localVideoRef}
             autoPlay
@@ -409,7 +410,7 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
 
         {/* Remote Videos */}
         {remoteStreams.map(({ socketId, stream }) => (
-          <Box key={socketId} position="relative" sx={{ width: '100%', height: '100%' }}>
+          <Box key={socketId} position="relative" sx={{ width: '100%', height: '100%', aspectRatio: '1' }}>
             <video
               autoPlay
               playsInline
