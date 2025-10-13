@@ -66,23 +66,32 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
         });
 
         // 4️⃣ handle incoming offer
-        socketRef.current.on("offer", async ({ from, offer }) => {
-          console.log("📥 Received offer from", from);
+       // 4️⃣ handle incoming offer
+socketRef.current.on("offer", async ({ from, offer }) => {
+  console.log("📥 Received offer from", from);
 
-          // Check if we already have a connection with this user
-          if (peerConnections[from]) {
-            console.log("⚠️ Already have connection with", from, "- ignoring duplicate offer");
-            return;
-          }
+  // Check if we already have a connection with this user
+  if (peerConnections[from]) {
+    console.log("⚠️ Already have connection with", from, "- ignoring duplicate offer");
+    return;
+  }
 
-          const pc = createPeerConnection(from, localStream);
-          setPeerConnections(prev => ({ ...prev, [from]: pc }));
+  const pc = createPeerConnection(from, localStream);
+  setPeerConnections(prev => ({ ...prev, [from]: pc }));
 
-          await pc.setRemoteDescription(offer);
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          console.log("📤 Sending answer to", from);
-        });
+  await pc.setRemoteDescription(offer);
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+
+  // ✨ SEND ANSWER BACK TO OFFERER ✨
+  socketRef.current.emit("answer", {
+    to: from,
+    answer,
+    from: socketRef.current.id,
+  });
+
+  console.log("📤 Sending answer to", from);
+});
 
         // 5️⃣ handle incoming answer
         socketRef.current.on("answer", async ({ from, answer }) => {
