@@ -64,19 +64,20 @@ export default function VideoCallComponent({
         if (localVideoRef.current)
           localVideoRef.current.srcObject = localStream;
 
-        socketRef.current = io(SOCKET_SERVER_URL, { transports: ["websocket"] });
         socketRef.current.emit("join_room", {
           roomId: channelName,
           userId: currentUser.username,
         });
 
-        socketRef.current.on("user_joined", ({ userId, socketId }) => {
+        socketRef.current.on("user-joined", ({ userId, socketId }) => {
           if (socketId === socketRef.current.id) return;
+
           const pc = createPeerConnection(socketId, localStream);
           peerConnectionsRef.current = {
             ...peerConnectionsRef.current,
             [socketId]: pc,
           };
+
           (async () => {
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
@@ -109,7 +110,7 @@ export default function VideoCallComponent({
           if (pc) await pc.setRemoteDescription(answer);
         });
 
-        socketRef.current.on("ice_candidate", async ({ from, candidate }) => {
+        socketRef.current.on("ice-candidate", async ({ from, candidate }) => {
           const pc = peerConnectionsRef.current[from];
           if (pc && candidate) await pc.addIceCandidate(candidate);
         });
