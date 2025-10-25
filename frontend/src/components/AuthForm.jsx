@@ -51,7 +51,7 @@ export default function AuthForm({ isLogin, onSuccess }) {
       </p>
 
       {/* Left align form fields */}
-      <div className="form-fields flex flex-col space-y-4 items-start">
+      <div className="form-fields flex flex-col space-y-4 w-full">
         {/* Username */}
         <div>
           <label>
