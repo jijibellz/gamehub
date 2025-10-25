@@ -1,9 +1,17 @@
-import { Box, IconButton, Tooltip, Avatar } from "@mui/material";
-import { Chat, Groups, SportsEsports, Pets } from "@mui/icons-material";
+import { Box, IconButton, Tooltip } from "@mui/material";
+import { Chat, Groups, SportsEsports, Logout } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 
 export default function LeftSidebar() {
   const navigate = useNavigate();
+
+  const handleLogout = () => {
+    // Clear authentication data from localStorage
+    localStorage.removeItem("token");
+    localStorage.removeItem("currentUser");
+    // Navigate back to auth page
+    navigate("/");
+  };
 
   return (
     <Box
@@ -93,20 +101,24 @@ export default function LeftSidebar() {
       {/* spacer */}
       <Box flexGrow={1} />
 
-      {/* bottom icon (placeholder for settings or status) */}
+      {/* bottom logout button */}
       <Box mb={1}>
-        <IconButton
-          sx={{
-            bgcolor: "#111214",
-            width: 40,
-            height: 40,
-            borderRadius: 2,
-          }}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="2" fill="#dcdde1" />
-          </svg>
-        </IconButton>
+        <Tooltip title="Logout" placement="right">
+          <IconButton
+            sx={{
+              bgcolor: "#111214",
+              width: 40,
+              height: 40,
+              borderRadius: 2,
+              "&:hover": {
+                bgcolor: "#dc3545",
+              },
+            }}
+            onClick={handleLogout}
+          >
+            <Logout sx={{ color: "#dcdde1" }} />
+          </IconButton>
+        </Tooltip>
       </Box>
     </Box>
   );
