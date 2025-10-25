@@ -8,24 +8,48 @@ import { SOCKET_SERVER_URL } from "../api/routes";
 export default function VideoCallComponent({ serverName, channelName, currentUser, onLeaveCall, onRoomFull }) {
   const localVideoRef = useRef(null);
 
-  // visible state
-  const [remoteStreams, setRemoteStreams] = useState([]); // [{ socketId, stream }]
-  const [stream, setStream] = useState(null);
-  const [isRoomFull, setIsRoomFull] = useState(false);
+  // State for window dimensions to trigger re-renders on resize
+  const [windowSize, setWindowSize] = useState({
+    width: typeof window !== 'undefined' ? window.innerWidth : 0,
+    height: typeof window !== 'undefined' ? window.innerHeight : 0
+  });
 
   // refs for mutable values used in callbacks
   const socketRef = useRef(null);
   const peerConnectionsRef = useRef({}); // { socketId: RTCPeerConnection }
   const remoteStreamsRef = useRef([]); // mirror of remoteStreams to avoid closure issues
 
-  // Constants
+  // Constants for dynamic sizing and layout optimization
   const MAX_PARTICIPANTS = 20;
-  const getVideoSize = (participantCount) => {
-    // Dynamic sizing based on participant count
-    if (participantCount <= 4) return { width: 300, height: 300 };
-    if (participantCount <= 9) return { width: 250, height: 250 };
-    if (participantCount <= 16) return { width: 200, height: 200 };
-    return { width: 150, height: 150 }; // For 17-20 participants
+  const getOptimalGridLayout = (participantCount) => {
+    // Calculate optimal grid dimensions based on participant count
+    if (participantCount <= 1) return { rows: 1, cols: 1 };
+    if (participantCount <= 4) return { rows: 2, cols: 2 };
+    if (participantCount <= 9) return { rows: 3, cols: 3 };
+    if (participantCount <= 16) return { rows: 4, cols: 4 };
+    return { rows: 5, cols: 4 }; // For 17-20 participants, 5 rows x 4 cols
+  };
+
+  const getVideoSize = (participantCount, gridLayout) => {
+    // Calculate video size based on available space and grid layout
+    const containerWidth = windowSize.width * 0.9; // 90% of viewport width
+    const containerHeight = windowSize.height * 0.7; // 70% of viewport height
+
+    const { rows, cols } = gridLayout;
+    const totalCells = rows * cols;
+
+    // Calculate optimal size to fit all videos in the grid
+    const videoWidth = Math.floor((containerWidth - (cols - 1) * 16) / cols); // 16px gap
+    const videoHeight = Math.floor((containerHeight - (rows - 1) * 16) / rows); // 16px gap
+
+    // Take the smaller dimension to maintain aspect ratio
+    const size = Math.min(videoWidth, videoHeight);
+
+    // Apply minimum and maximum constraints
+    return {
+      width: Math.max(120, Math.min(size, 400)), // Min 120px, Max 400px
+      height: Math.max(90, Math.min(size, 300))   // Min 90px, Max 300px
+    };
   };
 
   // helper to update both ref + state
@@ -62,6 +86,18 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
   useEffect(() => {
     let mounted = true;
     let localStream;
+
+    // Window resize handler
+    const handleResize = () => {
+      if (mounted) {
+        setWindowSize({
+          width: window.innerWidth,
+          height: window.innerHeight
+        });
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
 
     const initCall = async () => {
       try {
@@ -212,6 +248,7 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
 
     return () => {
       mounted = false;
+      window.removeEventListener('resize', handleResize);
       // cleanup
       try {
         if (socketRef.current) {
@@ -304,8 +341,13 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
     if (onLeaveCall) onLeaveCall();
   };
 
-  const currentParticipantCount = remoteStreams.length + 1;
-  const videoSize = getVideoSize(currentParticipantCount);
+  // Recalculate video size when participant count changes
+  useEffect(() => {
+    setWindowSize({
+      width: window.innerWidth,
+      height: window.innerHeight
+    });
+  }, [currentParticipantCount]);
 
   return (
     <Box sx={{ position: "relative", height: "100%", display: "flex", flexDirection: "column" }}>
@@ -347,13 +389,16 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
         sx={{
           flex: 1,
           display: "grid",
-          gridTemplateColumns: `repeat(auto-fit, ${videoSize.width}px)`,
+          gridTemplateColumns: `repeat(${gridLayout.cols}, ${videoSize.width}px)`,
+          gridTemplateRows: `repeat(${gridLayout.rows}, ${videoSize.height}px)`,
           gap: 2,
           justifyContent: "center",
           alignContent: "center",
           p: 2,
           maxHeight: "calc(100vh - 200px)",
           overflow: "auto",
+          placeItems: "center",
+          transition: "all 0.3s ease-in-out",
         }}
       >
         {/* Local Video */}
@@ -370,6 +415,7 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
               backgroundColor: "#000",
               objectFit: "cover",
               border: "2px solid #4CAF50",
+              transition: "all 0.3s ease-in-out",
             }}
           />
           <Typography
@@ -402,6 +448,7 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
                 backgroundColor: "#000",
                 objectFit: "cover",
                 border: "2px solid #2196F3",
+                transition: "all 0.3s ease-in-out",
               }}
               ref={videoEl => {
                 if (videoEl && stream) {
