@@ -347,7 +347,11 @@ export default function VideoCallComponent({ serverName, channelName, currentUse
       width: window.innerWidth,
       height: window.innerHeight
     });
-  }, [currentParticipantCount]);
+  }, [remoteStreams.length]);
+
+  const currentParticipantCount = remoteStreams.length + 1;
+  const gridLayout = getOptimalGridLayout(currentParticipantCount);
+  const videoSize = getVideoSize(currentParticipantCount, gridLayout);
 
   return (
     <Box sx={{ position: "relative", height: "100%", display: "flex", flexDirection: "column" }}>
